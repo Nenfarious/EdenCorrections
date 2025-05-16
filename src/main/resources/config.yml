@@ -1,0 +1,590 @@
+storage:
+  # How often to save data to disk (in minutes)
+  # Lower values save more frequently but cause more disk I/O
+  # Higher values are more efficient but risk more data loss on crash
+  autosave-interval: 5
+  # Storage type (yaml, mysql, sqlite)
+  type: yaml
+
+  # MySQL configuration (if using mysql)
+  mysql:
+    host: localhost
+    port: 3306
+    database: edencorrections
+    username: root
+    password: password
+    table-prefix: ec_
+
+  # SQLite configuration (if using sqlite)
+  sqlite:
+    file: database.db
+
+# Debug configuration
+debug:
+  # Whether to enable verbose debug logging
+  enabled: true
+  # Log level (INFO, WARNING, SEVERE)
+  level: INFO
+  # Whether to log loot generation details
+  log-loot-generation: true
+  # Whether to log rank detection details
+  log-rank-detection: true
+
+# Duty configuration
+duty:
+  # Region system configuration
+  region:
+    # Whether to use the WorldGuard region system
+    enabled: true
+    # The WorldGuard region where players can go on/off duty
+    name: guard
+
+  # NPC system configuration
+  npc:
+    # Whether to use the NPC system
+    enabled: true
+    # Whether to use Citizens NPCs (if available)
+    use-citizens: true
+    # The radius around NPCs where players can go on/off duty
+    interaction-radius: 3
+    # The name of the NPC
+    name: "<aqua><bold>Supervisor</bold></aqua>"
+
+  # Whether to clear the player's inventory when going on duty
+  clear-inventory: true
+
+  # Whether to broadcast when a player goes on/off duty
+  broadcast: true
+
+  # Minutes required to serve to earn off-duty time
+  threshold-minutes: 15
+
+  # Minutes of off-duty time rewarded after serving the threshold
+  reward-minutes: 30
+
+  # Maximum off-duty time a player can accumulate (in minutes)
+  # Default: 4320 minutes (72 hours or 3 days)
+  max-off-duty-time: 4320
+
+  # Immobilization duration when going on duty (in seconds)
+  # This gives inmates time to prepare for guard patrol
+  immobilization-duration: 30
+
+  # Activity rewards (future feature - currently tracked but not awarded)
+  # These will be used in a future update to calculate additional rewards
+  activity-rewards:
+    search-per-10: 5       # 10 searches = 5 minutes
+    successful-search: 10  # 1 successful search = 10 minutes
+    kills-per-5: 15        # 5 kills = 15 minutes
+    metal-detect: 10       # 1 successful metal detection = 10 minutes
+
+  # Sounds to play when going on/off duty
+  # Format: minecraft:sound.name
+  on-duty-sound: minecraft:block.note_block.pling
+  off-duty-sound: minecraft:block.note_block.bass
+
+  # Rank-specific kit override (optional)
+  # If not specified, the rank name will be used as the kit name
+  rank-kits:
+    trainee: trainee
+    private: private
+    officer: officer
+    sergeant: sergeant
+    captain: captain
+    guard: guard  # Default kit for players with no guard rank
+
+  # Commands to execute when a player goes on/off duty
+  # Placeholders: {player}, {uuid}
+  # Prefixes:
+  #   [player] - Executed as the player
+  #   [op] - Executed as the player with temporary OP status
+  #   No prefix - Executed from the console
+  commands:
+    on-duty:
+      - "sendtitlemsg {player} <green><bold>On Duty!</bold></green> \n <aqua><italic>Good luck out there!</italic></aqua>"
+    off-duty:
+      - "effect clear {player}"
+      - "sendtitlemsg {player} <red><bold>Off Duty!</bold></red> \n <aqua><italic>Another shift in the books. Good job!</italic></aqua>"
+
+# Guard buff system configuration
+guard-buff:
+  # Whether to enable the guard buff system
+  enabled: true
+  # Lone guard buff configuration
+  lone-guard:
+    # Whether to enable the lone guard buff
+    enabled: true
+    # Effects to apply to the lone guard
+    # Format: EFFECT_TYPE:AMPLIFIER:DURATION
+    # EFFECT_TYPE - Potion effect type (e.g. DAMAGE_RESISTANCE)
+    # AMPLIFIER - Effect level (0 = I, 1 = II, etc.)
+    # DURATION - Effect duration in seconds (use "infinite" for indefinite)
+    effects:
+      - "DAMAGE_RESISTANCE:1:infinite"
+      - "REGENERATION:0:infinite"
+    # Messages for the lone guard buff
+    messages:
+      # Message when buff is applied
+      apply: "<dark_gray>[</dark_gray><dark_red><bold>𝕏</bold></dark_red><dark_gray>]</dark_gray> <red>You are the only guard online! You now have damage resistance!</red>"
+      # Message when buff is about to be removed
+      remove-warning: "<dark_gray>[</dark_gray><dark_red><bold>𝕏</bold></dark_red><dark_gray>]</dark_gray> <red>Another guard has logged in! Removing effects in {seconds} seconds!</red>"
+      # Message when buff is removed
+      removed: "<dark_gray>[</dark_gray><dark_red><bold>𝕏</bold></dark_red><dark_gray>]</dark_gray> <red>Your special effects have been removed!</red>"
+    # Seconds to wait before removing buffs after another guard logs in
+    removal-delay: 10
+
+# Guard restriction system configuration
+guard-restrictions:
+  # Block breaking restrictions for guards
+  block-breaking:
+    # Whether to enable block breaking restrictions
+    enabled: true
+    # List of restricted block types or block tags
+    # Block types: minecraft:block_name
+    # Block tags: #minecraft:tag_name
+    restricted-blocks:
+      - "#minecraft:logs"
+      - "minecraft:sugar_cane"
+      - "minecraft:pumpkin"
+      - "minecraft:melon"
+      - "minecraft:cactus"
+      - "minecraft:bamboo"
+    # Exceptions to the restricted blocks
+    exceptions:
+      - "minecraft:birch_log"
+    # Region names where restrictions don't apply
+    exempt-regions:
+      - "takeover"
+    # Message to send when a guard tries to break a restricted block
+    message: "<dark_gray>[</dark_gray><dark_red><bold>𝕏</bold></dark_red><dark_gray>]</dark_gray> <red>You are not allowed to farm as a guard!</red>"
+
+# Guard loot system configuration
+guard-loot:
+  # Whether to enable the guard loot system
+  enabled: true
+  # Cooldown timer in seconds before a guard can drop loot again
+  cooldown: 600
+  # Message when a guard is on cooldown
+  cooldown-message: "<dark_gray>[</dark_gray><dark_red><bold>𝕏</bold></dark_red><dark_gray>]</dark_gray> <aqua>{victim}</aqua> <gray>has their guard loot on cooldown! </gray><aqua>({time}s)</aqua>"
+  # Token reward for guards who die
+  token-reward:
+    # Whether to enable token rewards
+    enabled: true
+    # Number of tokens to reward
+    amount: 200
+    # Message when tokens are rewarded
+    message: "<dark_gray>[</dark_gray><dark_red><bold>𝕏</bold></dark_red><dark_gray>]</dark_gray> <red>You fought bravely in combat and have received {tokens} tokens!</red>"
+    # Command to execute for token rewards
+    # Placeholders: {player}, {amount}
+    command: "tokenmanager give {player} {amount}"
+  # Loot tables for each guard rank
+  ranks:
+    # Trainee rank loot
+    trainee:
+      # Armor items
+      armor:
+        - item: "IRON_CHESTPLATE"
+          # Enchantments format: ENCHANTMENT:LEVEL:CHANCE%
+          enchantments:
+            - "PROTECTION:2:65%"
+            - "PROTECTION:3:30%"
+            - "PROTECTION:4:5%"
+          # Chance to drop this item
+          drop-chance: 50%
+        - item: "IRON_LEGGINGS"
+          enchantments:
+            - "PROTECTION:2:65%"
+            - "PROTECTION:3:30%"
+            - "PROTECTION:4:5%"
+          drop-chance: 50%
+        - item: "IRON_BOOTS"
+          enchantments:
+            - "PROTECTION:2:65%"
+            - "PROTECTION:3:30%"
+            - "PROTECTION:4:5%"
+          drop-chance: 50%
+        - item: "IRON_HELMET"
+          enchantments:
+            - "PROTECTION:2:65%"
+            - "PROTECTION:3:30%"
+            - "PROTECTION:4:5%"
+          drop-chance: 50%
+      # Weapon items
+      weapons:
+        - item: "IRON_SWORD"
+          enchantments:
+            - "SHARPNESS:2:65%"
+            - "SHARPNESS:3:30%"
+            - "SHARPNESS:4:5%"
+          drop-chance: 100%
+        - item: "BOW"
+          enchantments:
+            - "POWER:2:94%"
+            - "POWER:3:5%"
+            - "POWER:4:1%"
+          drop-chance: 100%
+        - item: "SHIELD"
+          drop-chance: 100%
+      # Resource items
+      resources:
+        - item: "ARROW"
+          # Amount format: MIN-MAX or single number
+          amount: "16-32"
+          drop-chance: 100%
+        - item: "COOKED_BEEF"
+          amount: "4-16"
+          drop-chance: 100%
+        - item: "IRON_INGOT"
+          amount: "10-30"
+          drop-chance: 100%
+        - item: "EXPERIENCE_BOTTLE"
+          amount: "8-16"
+          drop-chance: 100%
+
+    # Private rank loot
+    private:
+      armor:
+        - item: "IRON_CHESTPLATE"
+          enchantments:
+            - "PROTECTION:2:50%"
+            - "PROTECTION:3:40%"
+            - "PROTECTION:4:10%"
+          drop-chance: 50%
+        - item: "IRON_LEGGINGS"
+          enchantments:
+            - "PROTECTION:2:50%"
+            - "PROTECTION:3:40%"
+            - "PROTECTION:4:10%"
+          drop-chance: 50%
+        - item: "IRON_BOOTS"
+          enchantments:
+            - "PROTECTION:2:50%"
+            - "PROTECTION:3:40%"
+            - "PROTECTION:4:10%"
+          drop-chance: 50%
+        - item: "IRON_HELMET"
+          enchantments:
+            - "PROTECTION:2:50%"
+            - "PROTECTION:3:40%"
+            - "PROTECTION:4:10%"
+          drop-chance: 50%
+      weapons:
+        - item: "IRON_SWORD"
+          enchantments:
+            - "SHARPNESS:2:50%"
+            - "SHARPNESS:3:40%"
+            - "SHARPNESS:4:10%"
+          drop-chance: 100%
+        - item: "BOW"
+          enchantments:
+            - "POWER:2:87%"
+            - "POWER:3:10%"
+            - "POWER:4:3%"
+          drop-chance: 100%
+        - item: "SHIELD"
+          drop-chance: 100%
+      resources:
+        - item: "ARROW"
+          amount: "24-48"
+          drop-chance: 100%
+        - item: "COOKED_BEEF"
+          amount: "4-16"
+          drop-chance: 100%
+        - item: "IRON_INGOT"
+          amount: "15-45"
+          drop-chance: 100%
+        - item: "EXPERIENCE_BOTTLE"
+          amount: "12-24"
+          drop-chance: 100%
+
+    # Officer rank loot
+    officer:
+      armor:
+        - item: "IRON_CHESTPLATE"
+          enchantments:
+            - "PROTECTION:2:55%"
+            - "PROTECTION:3:30%"
+            - "PROTECTION:4:15%"
+          drop-chance: 50%
+        - item: "IRON_LEGGINGS"
+          enchantments:
+            - "PROTECTION:2:55%"
+            - "PROTECTION:3:30%"
+            - "PROTECTION:4:15%"
+          drop-chance: 50%
+        - item: "IRON_BOOTS"
+          enchantments:
+            - "PROTECTION:2:55%"
+            - "PROTECTION:3:30%"
+            - "PROTECTION:4:15%"
+          drop-chance: 50%
+        - item: "IRON_HELMET"
+          enchantments:
+            - "PROTECTION:2:55%"
+            - "PROTECTION:3:30%"
+            - "PROTECTION:4:15%"
+          drop-chance: 50%
+      weapons:
+        - item: "IRON_SWORD"
+          enchantments:
+            - "SHARPNESS:2:55%"
+            - "SHARPNESS:3:30%"
+            - "SHARPNESS:4:15%"
+          drop-chance: 100%
+        - item: "BOW"
+          enchantments:
+            - "POWER:2:80%"
+            - "POWER:3:15%"
+            - "POWER:4:5%"
+          drop-chance: 100%
+        - item: "SHIELD"
+          drop-chance: 100%
+      resources:
+        - item: "ARROW"
+          amount: "32-64"
+          drop-chance: 100%
+        - item: "COOKED_BEEF"
+          amount: "4-16"
+          drop-chance: 100%
+        - item: "IRON_INGOT"
+          amount: "20-60"
+          drop-chance: 100%
+        - item: "EXPERIENCE_BOTTLE"
+          amount: "16-32"
+          drop-chance: 100%
+
+    # Sergeant rank loot
+    sergeant:
+      armor:
+        - item: "DIAMOND_CHESTPLATE"
+          enchantments:
+            - "PROTECTION:2:100%"
+          drop-chance: 5%
+        - item: "IRON_CHESTPLATE"
+          enchantments:
+            - "PROTECTION:3:55%"
+            - "PROTECTION:4:40%"
+          drop-chance: 50%
+        - item: "DIAMOND_LEGGINGS"
+          enchantments:
+            - "PROTECTION:2:100%"
+          drop-chance: 5%
+        - item: "IRON_LEGGINGS"
+          enchantments:
+            - "PROTECTION:3:55%"
+            - "PROTECTION:4:40%"
+          drop-chance: 50%
+        - item: "DIAMOND_BOOTS"
+          enchantments:
+            - "PROTECTION:2:100%"
+          drop-chance: 5%
+        - item: "IRON_BOOTS"
+          enchantments:
+            - "PROTECTION:3:55%"
+            - "PROTECTION:4:40%"
+          drop-chance: 50%
+        - item: "DIAMOND_HELMET"
+          enchantments:
+            - "PROTECTION:2:100%"
+          drop-chance: 5%
+        - item: "IRON_HELMET"
+          enchantments:
+            - "PROTECTION:3:55%"
+            - "PROTECTION:4:40%"
+          drop-chance: 50%
+      weapons:
+        - item: "DIAMOND_SWORD"
+          enchantments:
+            - "SHARPNESS:2:100%"
+          drop-chance: 5%
+        - item: "IRON_SWORD"
+          enchantments:
+            - "SHARPNESS:3:55%"
+            - "SHARPNESS:4:40%"
+          drop-chance: 95%
+        - item: "BOW"
+          enchantments:
+            - "POWER:3:67%"
+            - "POWER:4:25%"
+            - "POWER:5:5%"
+            - "POWER:3,FLAME:1:3%"
+          drop-chance: 100%
+        - item: "SHIELD"
+          drop-chance: 100%
+      resources:
+        - item: "ARROW"
+          amount: "64-96"
+          drop-chance: 100%
+        - item: "COOKED_BEEF"
+          amount: "4-16"
+          drop-chance: 100%
+        - item: "IRON_INGOT"
+          amount: "25-75"
+          drop-chance: 100%
+        - item: "EXPERIENCE_BOTTLE"
+          amount: "20-40"
+          drop-chance: 100%
+        - item: "GOLD_INGOT"
+          amount: "5-25"
+          drop-chance: 100%
+        - item: "DIAMOND"
+          amount: "1-3"
+          drop-chance: 15%
+
+    # Captain rank loot
+    captain:
+      armor:
+        - item: "DIAMOND_CHESTPLATE"
+          enchantments:
+            - "PROTECTION:0:45%"
+            - "PROTECTION:1:30%"
+            - "PROTECTION:2:15%"
+            - "PROTECTION:3:7%"
+            - "PROTECTION:4:3%"
+          drop-chance: 50%
+        - item: "DIAMOND_LEGGINGS"
+          enchantments:
+            - "PROTECTION:0:45%"
+            - "PROTECTION:1:30%"
+            - "PROTECTION:2:15%"
+            - "PROTECTION:3:7%"
+            - "PROTECTION:4:3%"
+          drop-chance: 50%
+        - item: "DIAMOND_BOOTS"
+          enchantments:
+            - "PROTECTION:0:45%"
+            - "PROTECTION:1:30%"
+            - "PROTECTION:2:15%"
+            - "PROTECTION:3:7%"
+            - "PROTECTION:4:3%"
+          drop-chance: 50%
+        - item: "DIAMOND_HELMET"
+          enchantments:
+            - "PROTECTION:0:45%"
+            - "PROTECTION:1:30%"
+            - "PROTECTION:2:15%"
+            - "PROTECTION:3:7%"
+            - "PROTECTION:4:3%"
+          drop-chance: 50%
+      weapons:
+        - item: "DIAMOND_SWORD"
+          enchantments:
+            - "SHARPNESS:0:45%"
+            - "SHARPNESS:1:30%"
+            - "SHARPNESS:2:15%"
+            - "SHARPNESS:3:7%"
+            - "SHARPNESS:4:3%"
+          drop-chance: 100%
+        - item: "BOW"
+          enchantments:
+            - "POWER:3:45%"
+            - "POWER:3,FLAME:1:30%"
+            - "POWER:4:15%"
+            - "POWER:4,FLAME:1:7%"
+            - "POWER:5:2%"
+            - "POWER:5,FLAME:1:1%"
+          drop-chance: 100%
+        - item: "SHIELD"
+          enchantments:
+            - "DURABILITY:2:50%"
+            - "DURABILITY:3:25%"
+          drop-chance: 100%
+      resources:
+        - item: "ARROW"
+          amount: "96-128"
+          drop-chance: 100%
+        - item: "COOKED_BEEF"
+          amount: "4-16"
+          drop-chance: 100%
+        - item: "IRON_INGOT"
+          amount: "40-100"
+          drop-chance: 100%
+        - item: "EXPERIENCE_BOTTLE"
+          amount: "32-64"
+          drop-chance: 100%
+        - item: "GOLD_INGOT"
+          amount: "10-30"
+          drop-chance: 100%
+        - item: "DIAMOND"
+          amount: "2-5"
+          drop-chance: 100%
+
+# Guard death penalties configuration
+guard-death-penalties:
+  # Whether to enable guard death penalties
+  enabled: true
+  # Time in seconds a guard is restricted after death
+  lock-time: 60
+  # Regions the player cannot leave while locked
+  restricted-regions:
+    - "guard"
+  # Message when trying to leave while locked
+  message: "<dark_gray>[</dark_gray><dark_red><bold>𝕏</bold></dark_red><dark_gray>]</dark_gray> <gray>You cannot leave for </gray><red>{time} seconds</red> <gray>for dying!</gray>"
+
+# Conversion configuration
+conversion:
+  # Token conversion settings
+  tokens:
+    # Minimum minutes required to convert
+    minimum: 5
+    # Tokens per minute ratio
+    ratio: 100
+    # Command to execute for token conversion
+    # Placeholders: {player}, {amount}
+    command: "tokenmanager give {player} {amount}"
+
+# GUI configuration
+gui:
+  # Whether to show the duty selection GUI on join
+  # Set to false as requested
+  show-on-join: false
+  # Delay in ticks before showing the GUI (20 ticks = 1 second)
+  join-delay: 20
+  # Sound to play when opening GUI
+  open-sound: minecraft:block.chest.open
+  # Whether to use the enhanced GUI system
+  use-enhanced-gui: true
+  # Messages for GUI interactions
+  messages:
+    continuing-duty: "<green>You're continuing your guard shift!</green>"
+    remaining-off-duty: "<yellow>You're remaining off duty.</yellow>"
+
+# Messages configuration
+messages:
+  prefix: "<gold>[Corrections]</gold> "
+  no-permission: "<red>You don't have permission to do that!</red>"
+  not-in-region: "<red>You must be in the duty room to go on/off duty!</red>"
+  not-in-area: "<red>You must be in a designated duty area to go on/off duty!</red>"
+  already-on-duty: "<red>You are already on duty!</red>"
+  already-off-duty: "<red>You are already off duty!</red>"
+  on-duty: "<green>You are now on guard duty!</green>"
+  off-duty: "<yellow>You are now off duty.</yellow>"
+  off-duty-reward: "<green>You've earned {minutes} minutes of off-duty time!</green>"
+  time-remaining: "<yellow>You have {minutes} minutes of off-duty time remaining.</yellow>"
+  time-added: "<green>Added {minutes} minutes to {player}'s off-duty time.</green>"
+  time-set: "<green>Set {player}'s off-duty time to {minutes} minutes.</green>"
+  converted-time: "<green>Converted {minutes} minutes to {tokens} tokens!</green>"
+  broadcast-on-duty: "<gold>{player} is now on guard duty!</gold>"
+  broadcast-off-duty: "<gold>{player} is now off duty.</gold>"
+  time-added-capped: "<green>Added time to your off-duty bank. You've reached the maximum of {max} minutes.</green>"
+  threshold-reached: "<green>You've served enough time to earn a reward! Going off duty now will earn you {minutes} minutes of off-duty time.</green>"
+
+  # New immobilization messages
+  immobilization-start: "<yellow>You are immobilized for {seconds} seconds while preparing for duty!</yellow>"
+  immobilization-broadcast: "<red>WARNING: {rank} {player} is going on duty in {seconds} seconds!</red>"
+  immobilization-reminder: "<red>You cannot move while preparing for duty! ({seconds}s remaining)</red>"
+  immobilization-complete: "<green>You are now on duty and ready to patrol!</green>"
+  immobilization-complete-broadcast: "<red>ALERT: {player} is now on duty and patrolling!</red>"
+
+# Command messages configuration
+commands:
+  check-guards:
+    message: "<dark_gray>[</dark_gray><dark_red><bold>𝕏</bold></dark_red><dark_gray>]</dark_gray> <red>There are currently {count} guards online!</red>"
+  check-death-cooldown:
+    message: "<dark_gray>[</dark_gray><dark_red><bold>𝕏</bold></dark_red><dark_gray>]</dark_gray> <red>{player}'s death cooldown is currently at {time}</red>"
+  clear-death-cooldown:
+    message: "<dark_gray>[</dark_gray><dark_red><bold>𝕏</bold></dark_red><dark_gray>]</dark_gray> <red>{player}'s death cooldown has been cleared!</red>"
+  check-penalty:
+    message: "<dark_gray>[</dark_gray><dark_red><bold>𝕏</bold></dark_red><dark_gray>]</dark_gray> <red>{player}'s death penalty is currently at {time} seconds</red>"
+  clear-penalty:
+    message: "<dark_gray>[</dark_gray><dark_red><bold>𝕏</bold></dark_red><dark_gray>]</dark_gray>
