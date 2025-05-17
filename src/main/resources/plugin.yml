@@ -1,0 +1,150 @@
+name: EdenCorrections
+version: '${project.version}'
+main: dev.lsdmc.edencorrections.EdenCorrections
+api-version: '1.20'
+authors: [LSDMC]
+description: A prison-themed plugin for guard duty and inmate management
+depend: [WorldGuard, WorldEdit]
+softdepend: [PlaceholderAPI, LuckPerms, Citizens]
+commands:
+  edencorrections:
+    description: Main command for the Corrections plugin
+    aliases: [cor, eco]
+    permission: edencorrections.use
+    usage: |-
+      /edencorrections help - Shows help menu
+      /edencorrections duty - Toggle guard duty
+      /edencorrections status [player] - Check duty status
+      /edencorrections time - Check your off-duty time
+      /edencorrections stats - Check your current duty session stats
+      /edencorrections search - Record a prisoner search
+      /edencorrections found - Record a successful contraband search
+      /edencorrections detect - Record a successful metal detection
+      /edencorrections addtime <player> <minutes> - Add off-duty time
+      /edencorrections settime <player> <minutes> - Set off-duty time
+      /edencorrections convert <minutes> - Convert time to tokens
+      /edencorrections explain - Explain the duty system
+      /edencorrections reload - Reload the plugin
+      /edencorrections checkguards - Check how many guards are online
+      /edencorrections fixguards - Recalculate the number of online guards
+      /edencorrections checkdeathcooldown <player> - Check a player's death cooldown
+      /edencorrections cleardeathcooldown <player> - Clear a player's death cooldown
+      /edencorrections checkpenalty <player> - Check a player's death penalty
+      /edencorrections clearpenalty <player> - Clear a player's death penalty
+      /edencorrections checkperms <player> - Check a player's guard permissions
+      /edencorrections checkrank <player> - Check a player's guard rank
+      /edencorrections gui - Open the duty selection GUI
+  dutynpc:
+    description: Commands for managing duty NPCs
+    permission: edencorrections.admin.npc
+    usage: |-
+      /dutynpc create - Create a duty NPC at your location
+      /dutynpc remove [id] - Remove a duty NPC by ID or the closest one
+      /dutynpc list - List all duty NPCs
+      /dutynpc help - Shows help menu
+
+permissions:
+  edencorrections.use:
+    description: Allows basic use of the corrections command
+    default: true
+
+  edencorrections.duty:
+    description: Allows toggling guard duty
+    default: op
+
+  edencorrections.duty.actions:
+    description: Allows recording duty actions like searches
+    default: op
+
+  edencorrections.duty.check:
+    description: Allows checking duty status and time
+    default: true
+
+  edencorrections.admin.settime:
+    description: Allows setting or adding a player's off-duty time
+    default: op
+
+  edencorrections.admin.npc:
+    description: Allows managing duty NPCs
+    default: op
+
+  edencorrections.converttime:
+    description: Allows converting off-duty time to tokens
+    default: op
+
+  edencorrections.admin.reload:
+    description: Allows reloading the plugin configuration
+    default: op
+
+  edencorrections.admin.checkguards:
+    description: Allows checking how many guards are online
+    default: op
+
+  edencorrections.admin.fixguards:
+    description: Allows recalculating the number of online guards
+    default: op
+
+  edencorrections.admin.checkdeathcooldown:
+    description: Allows checking a player's death cooldown
+    default: op
+
+  edencorrections.admin.cleardeathcooldown:
+    description: Allows clearing a player's death cooldown
+    default: op
+
+  edencorrections.admin.checkpenalty:
+    description: Allows checking a player's death penalty
+    default: op
+
+  edencorrections.admin.clearpenalty:
+    description: Allows clearing a player's death penalty
+    default: op
+
+  edencorrections.admin.checkperms:
+    description: Allows checking a player's guard permissions
+    default: op
+
+  edencorrections.admin.checkrank:
+    description: Allows checking a player's guard rank
+    default: op
+
+  edencorrections.rank.trainee:
+    description: Identifies a player as a guard trainee
+    default: false
+
+  edencorrections.rank.private:
+    description: Identifies a player as a guard private
+    default: false
+
+  edencorrections.rank.officer:
+    description: Identifies a player as a guard officer
+    default: false
+
+  edencorrections.rank.sergeant:
+    description: Identifies a player as a guard sergeant
+    default: false
+
+  edencorrections.rank.captain:
+    description: Identifies a player as a guard captain
+    default: false
+
+  edencorrections.admin:
+    description: Gives access to all admin permissions
+    default: op
+    children:
+      edencorrections.use: true
+      edencorrections.duty: true
+      edencorrections.duty.check: true
+      edencorrections.duty.actions: true
+      edencorrections.admin.settime: true
+      edencorrections.admin.npc: true
+      edencorrections.converttime: true
+      edencorrections.admin.reload: true
+      edencorrections.admin.checkguards: true
+      edencorrections.admin.fixguards: true
+      edencorrections.admin.checkdeathcooldown: true
+      edencorrections.admin.cleardeathcooldown: true
+      edencorrections.admin.checkpenalty: true
+      edencorrections.admin.clearpenalty: true
+      edencorrections.admin.checkperms: true
+      edencorrections.admin.checkrank: true
