@@ -28,7 +28,7 @@ public class GuardRankManager {
 
         // Default rank if no specific rank permission but has general guard permission
         if (player.hasPermission("edencorrections.duty") ||
-                player.hasPermission("edenprison.guard")) {
+                player.hasPermission("edencorrections.guard")) {
             plugin.getLogger().info("Using default 'guard' rank for player " + player.getName());
             return "guard";
         }

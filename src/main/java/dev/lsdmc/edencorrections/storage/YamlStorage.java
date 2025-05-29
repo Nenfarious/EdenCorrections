@@ -157,6 +157,30 @@ public class YamlStorage implements StorageManager {
         return offDutyMinutes;
     }
 
+    // Activity tracking methods (not supported in YamlStorage yet)
+    @Override
+    public int getSearchCount(UUID playerId) { throw new UnsupportedOperationException("Activity tracking not supported in YamlStorage yet"); }
+    @Override
+    public void incrementSearchCount(UUID playerId) { throw new UnsupportedOperationException("Activity tracking not supported in YamlStorage yet"); }
+    @Override
+    public int getSuccessfulSearchCount(UUID playerId) { throw new UnsupportedOperationException("Activity tracking not supported in YamlStorage yet"); }
+    @Override
+    public void incrementSuccessfulSearchCount(UUID playerId) { throw new UnsupportedOperationException("Activity tracking not supported in YamlStorage yet"); }
+    @Override
+    public int getKillCount(UUID playerId) { throw new UnsupportedOperationException("Activity tracking not supported in YamlStorage yet"); }
+    @Override
+    public void incrementKillCount(UUID playerId) { throw new UnsupportedOperationException("Activity tracking not supported in YamlStorage yet"); }
+    @Override
+    public int getMetalDetectCount(UUID playerId) { throw new UnsupportedOperationException("Activity tracking not supported in YamlStorage yet"); }
+    @Override
+    public void incrementMetalDetectCount(UUID playerId) { throw new UnsupportedOperationException("Activity tracking not supported in YamlStorage yet"); }
+    @Override
+    public int getApprehensionCount(UUID playerId) { throw new UnsupportedOperationException("Activity tracking not supported in YamlStorage yet"); }
+    @Override
+    public void incrementApprehensionCount(UUID playerId) { throw new UnsupportedOperationException("Activity tracking not supported in YamlStorage yet"); }
+    @Override
+    public void resetActivityCounts(UUID playerId) { throw new UnsupportedOperationException("Activity tracking not supported in YamlStorage yet"); }
+
     private void saveConfig() {
         try {
             dutyConfig.save(dutyFile);

@@ -12,6 +12,9 @@ import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryHolder;
 
+/**
+ * Listener for GUI-related events
+ */
 public class GuiListener implements Listener {
     private final EdenCorrections plugin;
 
@@ -36,14 +39,36 @@ public class GuiListener implements Listener {
             // Cancel the event to prevent item movement
             event.setCancelled(true);
 
-            // Handle based on the GUI type
-            if (guiHolder.getGuiType() == GuiHolder.GuiType.DUTY_SELECTION) {
-                plugin.getGuiManager().handleDutySelectionGuiClick(player, event.getSlot());
-            } else if (guiHolder.getGuiType() == GuiHolder.GuiType.ENHANCED_MAIN) {
-                plugin.getGuiManager().handleEnhancedGuiClick(player, event.getSlot(), clickedInventory);
-            } else if (guiHolder.getGuiType() == GuiHolder.GuiType.SHOP_VIEW) {
-                // New handler for shop GUI
-                plugin.getGuiManager().handleShopGuiClick(player, event.getSlot(), clickedInventory);
+            // Handle based on the GUI type - route to the appropriate handler
+            switch (guiHolder.getGuiType()) {
+                case ENHANCED_MAIN:
+                    // Main menu handler
+                    plugin.getGuiManager().handleMainMenuClick(player, event.getSlot());
+                    break;
+                case DUTY_SELECTION:
+                    // Duty management menu handler
+                    plugin.getGuiManager().handleDutyMenuClick(player, event.getSlot());
+                    break;
+                case STATS_VIEW:
+                    // Stats menu handler
+                    plugin.getGuiManager().handleStatsMenuClick(player, event.getSlot());
+                    break;
+                case ACTIONS_VIEW:
+                    // Actions menu handler
+                    plugin.getGuiManager().handleActionsMenuClick(player, event.getSlot());
+                    break;
+                case EQUIPMENT_VIEW:
+                    // Equipment menu handler
+                    plugin.getGuiManager().handleEquipmentMenuClick(player, event.getSlot());
+                    break;
+                case SHOP_VIEW:
+                    // Shop menu handler
+                    plugin.getGuiManager().handleShopMenuClick(player, event.getSlot());
+                    break;
+                default:
+                    // Legacy fallback for backward compatibility
+                    plugin.getGuiManager().handleEnhancedGuiClick(player, event.getSlot(), clickedInventory);
+                    break;
             }
         } else {
             // Check if the top inventory is one of our GUIs (even if clicking in the bottom inventory)
@@ -68,12 +93,8 @@ public class GuiListener implements Listener {
             plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
                 // Only show if they're still online
                 if (player.isOnline()) {
-                    // Use the enhanced GUI if enabled, otherwise use the old one
-                    if (plugin.getConfig().getBoolean("gui.use-enhanced-gui", true)) {
-                        plugin.getGuiManager().openEnhancedCorrectionsGui(player);
-                    } else {
-                        plugin.getGuiManager().openDutySelectionGui(player);
-                    }
+                    // Always open the main menu with the redesigned system
+                    plugin.getGuiManager().openMainMenu(player);
                 }
             }, delay);
         }

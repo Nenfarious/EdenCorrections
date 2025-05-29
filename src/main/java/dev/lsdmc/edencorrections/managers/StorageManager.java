@@ -75,4 +75,17 @@ public interface StorageManager {
      * @return Map of player UUIDs to off-duty minutes
      */
     Map<UUID, Integer> loadOffDutyMinutes();
+
+    // Activity tracking methods (default: throw UnsupportedOperationException if not implemented)
+    default int getSearchCount(UUID playerId) { throw new UnsupportedOperationException("Not implemented"); }
+    default void incrementSearchCount(UUID playerId) { throw new UnsupportedOperationException("Not implemented"); }
+    default int getSuccessfulSearchCount(UUID playerId) { throw new UnsupportedOperationException("Not implemented"); }
+    default void incrementSuccessfulSearchCount(UUID playerId) { throw new UnsupportedOperationException("Not implemented"); }
+    default int getKillCount(UUID playerId) { throw new UnsupportedOperationException("Not implemented"); }
+    default void incrementKillCount(UUID playerId) { throw new UnsupportedOperationException("Not implemented"); }
+    default int getMetalDetectCount(UUID playerId) { throw new UnsupportedOperationException("Not implemented"); }
+    default void incrementMetalDetectCount(UUID playerId) { throw new UnsupportedOperationException("Not implemented"); }
+    default int getApprehensionCount(UUID playerId) { throw new UnsupportedOperationException("Not implemented"); }
+    default void incrementApprehensionCount(UUID playerId) { throw new UnsupportedOperationException("Not implemented"); }
+    default void resetActivityCounts(UUID playerId) { throw new UnsupportedOperationException("Not implemented"); }
 }
