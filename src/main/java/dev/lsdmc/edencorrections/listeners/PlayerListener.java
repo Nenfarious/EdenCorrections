@@ -31,7 +31,8 @@ public class PlayerListener implements Listener {
                     if (offDutyMinutes > 0) {
                         Component message = MessageUtils.parseMessage(plugin.getConfig()
                                 .getString("messages.time-remaining", "<yellow>You have {minutes} minutes of off-duty time remaining.</yellow>")
-                                .replace("{minutes}", String.valueOf(offDutyMinutes)));
+                                .replace("{minutes}", String.valueOf(offDutyMinutes))
+                                .replace("{player}", player.getName()));
 
                         player.sendMessage(MessageUtils.getPrefix(plugin).append(message));
                     }
@@ -44,6 +45,8 @@ public class PlayerListener implements Listener {
                 }
             }
         }.runTaskLater(plugin, 40L); // Run after 2 seconds to ensure player is fully loaded
+
+        plugin.getJailManager().handlePlayerJoin(player);
     }
 
     @EventHandler

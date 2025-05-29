@@ -1,6 +1,7 @@
 package dev.lsdmc.edencorrections.managers;
 
 import dev.lsdmc.edencorrections.EdenCorrections;
+import dev.lsdmc.edencorrections.config.ConfigManager;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.scheduler.BukkitTask;
@@ -16,9 +17,11 @@ import java.util.logging.Level;
 /**
  * Optimized data manager that handles all plugin data with minimal overhead
  * Implements StorageManager interface for compatibility with existing code
+ * Updated to use centralized configuration management
  */
 public class DataManager implements StorageManager {
     private final EdenCorrections plugin;
+    private final ConfigManager configManager;
 
     // Use ConcurrentHashMap for thread safety without locking overhead
     private final Map<UUID, Boolean> dutyStatus = new ConcurrentHashMap<>();
@@ -30,6 +33,7 @@ public class DataManager implements StorageManager {
     private final Map<UUID, Integer> successfulSearchCount = new ConcurrentHashMap<>();
     private final Map<UUID, Integer> killCount = new ConcurrentHashMap<>();
     private final Map<UUID, Integer> metalDetectCount = new ConcurrentHashMap<>();
+    private final Map<UUID, Integer> apprehensionCount = new ConcurrentHashMap<>();
 
     // Track which data has changed to optimize saves
     private final Map<UUID, Boolean> dirtyData = new ConcurrentHashMap<>();
@@ -40,13 +44,10 @@ public class DataManager implements StorageManager {
 
     // Autosave task
     private BukkitTask autoSaveTask;
-    private final int autoSaveInterval;
 
     public DataManager(EdenCorrections plugin) {
         this.plugin = plugin;
-
-        // Get autosave interval from config (default: 5 minutes)
-        autoSaveInterval = plugin.getConfig().getInt("storage.autosave-interval", 5) * 20 * 60;
+        this.configManager = plugin.getConfigManager();
 
         // Initialize data file
         dataFile = new File(plugin.getDataFolder(), "data.yml");
@@ -129,6 +130,7 @@ public class DataManager implements StorageManager {
         successfulSearchCount.clear();
         killCount.clear();
         metalDetectCount.clear();
+        apprehensionCount.clear();
 
         // Load duty status
         if (dataConfig.contains("duty_status")) {
@@ -228,6 +230,19 @@ public class DataManager implements StorageManager {
                 }
             }
         }
+
+        // Load apprehension count
+        if (dataConfig.contains("apprehension_count")) {
+            for (String key : dataConfig.getConfigurationSection("apprehension_count").getKeys(false)) {
+                try {
+                    UUID playerId = UUID.fromString(key);
+                    int count = dataConfig.getInt("apprehension_count." + key);
+                    apprehensionCount.put(playerId, count);
+                } catch (IllegalArgumentException e) {
+                    plugin.getLogger().warning("Invalid UUID in data.yml: " + key);
+                }
+            }
+        }
     }
 
     /**
@@ -239,6 +254,9 @@ public class DataManager implements StorageManager {
             autoSaveTask.cancel();
         }
 
+        // Get autosave interval from centralized config
+        int autoSaveInterval = configManager.getAutoSaveInterval() * 20 * 60; // Convert minutes to ticks
+
         // Start new task
         autoSaveTask = plugin.getServer().getScheduler().runTaskTimerAsynchronously(
                 plugin,
@@ -246,6 +264,8 @@ public class DataManager implements StorageManager {
                 autoSaveInterval,
                 autoSaveInterval
         );
+
+        plugin.getLogger().info("Started autosave task with interval: " + configManager.getAutoSaveInterval() + " minutes");
     }
 
     /**
@@ -283,6 +303,10 @@ public class DataManager implements StorageManager {
 
             // Clear dirty flags
             dirtyData.clear();
+
+            if (configManager.isDebugEnabled()) {
+                plugin.getLogger().info("Autosaved player data for " + dirtyData.size() + " players");
+            }
         } catch (IOException e) {
             plugin.getLogger().log(Level.SEVERE, "Failed to save data.yml", e);
         }
@@ -311,6 +335,11 @@ public class DataManager implements StorageManager {
         if (metalDetectCount.containsKey(playerId)) {
             dataConfig.set("metal_detect_count." + playerId.toString(), metalDetectCount.get(playerId));
         }
+
+        // Apprehension count
+        if (apprehensionCount.containsKey(playerId)) {
+            dataConfig.set("apprehension_count." + playerId.toString(), apprehensionCount.get(playerId));
+        }
     }
 
     /**
@@ -332,6 +361,7 @@ public class DataManager implements StorageManager {
         for (UUID playerId : successfulSearchCount.keySet()) markDirty(playerId);
         for (UUID playerId : killCount.keySet()) markDirty(playerId);
         for (UUID playerId : metalDetectCount.keySet()) markDirty(playerId);
+        for (UUID playerId : apprehensionCount.keySet()) markDirty(playerId);
 
         // Save all dirty data
         saveAllDirtyData();
@@ -425,6 +455,7 @@ public class DataManager implements StorageManager {
     /**
      * Get a player's search count
      */
+    @Override
     public int getSearchCount(UUID playerId) {
         return searchCount.getOrDefault(playerId, 0);
     }
@@ -432,6 +463,7 @@ public class DataManager implements StorageManager {
     /**
      * Increment a player's search count
      */
+    @Override
     public void incrementSearchCount(UUID playerId) {
         searchCount.put(playerId, getSearchCount(playerId) + 1);
         markDirty(playerId);
@@ -440,6 +472,7 @@ public class DataManager implements StorageManager {
     /**
      * Get a player's successful search count
      */
+    @Override
     public int getSuccessfulSearchCount(UUID playerId) {
         return successfulSearchCount.getOrDefault(playerId, 0);
     }
@@ -447,6 +480,7 @@ public class DataManager implements StorageManager {
     /**
      * Increment a player's successful search count
      */
+    @Override
     public void incrementSuccessfulSearchCount(UUID playerId) {
         successfulSearchCount.put(playerId, getSuccessfulSearchCount(playerId) + 1);
         markDirty(playerId);
@@ -455,6 +489,7 @@ public class DataManager implements StorageManager {
     /**
      * Get a player's kill count
      */
+    @Override
     public int getKillCount(UUID playerId) {
         return killCount.getOrDefault(playerId, 0);
     }
@@ -462,6 +497,7 @@ public class DataManager implements StorageManager {
     /**
      * Increment a player's kill count
      */
+    @Override
     public void incrementKillCount(UUID playerId) {
         killCount.put(playerId, getKillCount(playerId) + 1);
         markDirty(playerId);
@@ -470,6 +506,7 @@ public class DataManager implements StorageManager {
     /**
      * Get a player's metal detect count
      */
+    @Override
     public int getMetalDetectCount(UUID playerId) {
         return metalDetectCount.getOrDefault(playerId, 0);
     }
@@ -477,19 +514,39 @@ public class DataManager implements StorageManager {
     /**
      * Increment a player's metal detect count
      */
+    @Override
     public void incrementMetalDetectCount(UUID playerId) {
         metalDetectCount.put(playerId, getMetalDetectCount(playerId) + 1);
         markDirty(playerId);
     }
 
     /**
+     * Get a player's apprehension count
+     */
+    @Override
+    public int getApprehensionCount(UUID playerId) {
+        return apprehensionCount.getOrDefault(playerId, 0);
+    }
+
+    /**
+     * Increment a player's apprehension count
+     */
+    @Override
+    public void incrementApprehensionCount(UUID playerId) {
+        apprehensionCount.put(playerId, getApprehensionCount(playerId) + 1);
+        markDirty(playerId);
+    }
+
+    /**
      * Reset a player's activity counts
      */
+    @Override
     public void resetActivityCounts(UUID playerId) {
         searchCount.put(playerId, 0);
         successfulSearchCount.put(playerId, 0);
         killCount.put(playerId, 0);
         metalDetectCount.put(playerId, 0);
+        apprehensionCount.put(playerId, 0);
         markDirty(playerId);
     }
 }

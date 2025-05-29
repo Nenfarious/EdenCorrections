@@ -21,7 +21,11 @@ public class MessageUtils {
      * @return The prefix Component
      */
     public static Component getPrefix(EdenCorrections plugin) {
-        String prefixString = plugin.getConfig().getString("messages.prefix", "<gold>[Corrections]</gold> ");
+        // Use centralized config management for better performance
+        String prefixString = plugin.getConfigManager().getMessagesConfig().prefix;
+        if (prefixString == null || prefixString.isEmpty()) {
+            prefixString = "<gold>[Corrections]</gold> ";
+        }
         return parseMessage(prefixString);
     }
 

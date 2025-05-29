@@ -11,6 +11,8 @@ import com.sk89q.worldguard.protection.regions.RegionQuery;
 import dev.lsdmc.edencorrections.EdenCorrections;
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
+import com.sk89q.worldguard.protection.flags.StateFlag;
+import com.sk89q.worldguard.protection.flags.Flags;
 
 import java.util.List;
 
@@ -175,5 +177,29 @@ public class RegionUtils {
         }
 
         return highestRegion != null ? highestRegion.getId() : null;
+    }
+
+    /**
+     * Check if a location is in a PvP region
+     */
+    public static boolean isPvPRegion(Location location) {
+        // Get WorldGuard region container
+        RegionContainer container = WorldGuard.getInstance().getPlatform().getRegionContainer();
+        if (container == null) {
+            return false;
+        }
+
+        // Get region manager for the world
+        RegionManager regions = container.get(BukkitAdapter.adapt(location.getWorld()));
+        if (regions == null) {
+            return false;
+        }
+
+        // Get all regions at the location
+        ApplicableRegionSet regionSet = regions.getApplicableRegions(
+                BlockVector3.at(location.getX(), location.getY(), location.getZ()));
+
+        // Check if any region has PvP flag set to allow
+        return regionSet.testState(null, Flags.PVP);
     }
 }

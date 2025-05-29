@@ -1,7 +1,7 @@
 package dev.lsdmc.edencorrections.managers;
 
 import dev.lsdmc.edencorrections.EdenCorrections;
-import dev.lsdmc.edencorrections.listeners.GuardBuffListener;
+import dev.lsdmc.edencorrections.config.ConfigManager;
 import dev.lsdmc.edencorrections.utils.MessageUtils;
 import net.kyori.adventure.text.Component;
 import org.bukkit.Bukkit;
@@ -19,41 +19,37 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Manages guard buff system, particularly the lone guard buff feature
+ * Updated to use centralized configuration management and only count on-duty guards
  */
 public class GuardBuffManager {
     private final EdenCorrections plugin;
+    private final ConfigManager configManager;
+    private ConfigManager.GuardBuffConfig config;
+
     private int onlineGuardCount = 0;
-    private boolean buffEnabled;
     private final Map<String, String> effectsConfig = new HashMap<>();
     private final List<BuffedGuard> buffedGuards = new ArrayList<>();
     private final Map<UUID, BukkitTask> removalTasks = new ConcurrentHashMap<>();
 
-    // Messages
-    private String applyMessage;
-    private String removeWarningMessage;
-    private String removedMessage;
-    private int removalDelay;
-
     public GuardBuffManager(EdenCorrections plugin) {
         this.plugin = plugin;
+        this.configManager = plugin.getConfigManager();
         loadConfig();
 
         // Initialize guard count on startup
         recalculateOnlineGuards();
-
-        // Register this manager with the plugin
-        plugin.getServer().getPluginManager().registerEvents(new GuardBuffListener(this, plugin), plugin);
     }
 
     private void loadConfig() {
-        buffEnabled = plugin.getConfig().getBoolean("guard-buff.enabled", true);
-        boolean loneGuardEnabled = plugin.getConfig().getBoolean("guard-buff.lone-guard.enabled", true);
+        this.config = configManager.getGuardBuffConfig();
+
+        // Clear previous settings
+        effectsConfig.clear();
 
         // Only process the rest if the feature is enabled
-        if (buffEnabled && loneGuardEnabled) {
+        if (config.enabled && config.loneGuardEnabled) {
             // Load effects
-            List<String> effects = plugin.getConfig().getStringList("guard-buff.lone-guard.effects");
-            for (String effectString : effects) {
+            for (String effectString : config.loneGuardEffects) {
                 String[] parts = effectString.split(":");
                 if (parts.length >= 2) {
                     String effectType = parts[0];
@@ -61,18 +57,6 @@ public class GuardBuffManager {
                     effectsConfig.put(effectType, effectDetails);
                 }
             }
-
-            // Load messages
-            applyMessage = plugin.getConfig().getString("guard-buff.lone-guard.messages.apply",
-                    "&8[&4&l𝕏&8] &cYou are the only guard online! You now have special protection!");
-
-            removeWarningMessage = plugin.getConfig().getString("guard-buff.lone-guard.messages.remove-warning",
-                    "&8[&4&l𝕏&8] &cAnother guard has logged in! Removing effects in {seconds} seconds!");
-
-            removedMessage = plugin.getConfig().getString("guard-buff.lone-guard.messages.removed",
-                    "&8[&4&l𝕏&8] &cYour special effects have been removed!");
-
-            removalDelay = plugin.getConfig().getInt("guard-buff.lone-guard.removal-delay", 10);
         }
     }
 
@@ -80,11 +64,11 @@ public class GuardBuffManager {
      * Recalculate the number of online guards
      */
     public void recalculateOnlineGuards() {
-        if (!buffEnabled) return;
+        if (!config.enabled) return;
 
         int count = 0;
         for (Player player : Bukkit.getOnlinePlayers()) {
-            if (isPlayerGuard(player)) {
+            if (isPlayerOnDutyGuard(player)) {
                 count++;
             }
         }
@@ -95,7 +79,7 @@ public class GuardBuffManager {
 
     /**
      * Recalculate lone guard status
-     * This is called when a guard dies to check if there's only one guard left
+     * This is called when a guard dies or goes off duty to check if there's only one guard left
      */
     public void recalculateLoneGuardStatus() {
         recalculateOnlineGuards();
@@ -116,6 +100,9 @@ public class GuardBuffManager {
         } else if (oldCount == 1 && count > 1) {
             // We went from one guard to multiple guards - schedule buff removal
             scheduleLoneGuardBuffRemoval();
+        } else if (count == 0) {
+            // No guards on duty - remove all buffs immediately
+            removeAllBuffs();
         }
     }
 
@@ -123,13 +110,13 @@ public class GuardBuffManager {
      * Apply buffs to the lone guard
      */
     private void applyLoneGuardBuff() {
-        if (!buffEnabled) return;
+        if (!config.enabled) return;
 
         Player loneGuard = null;
 
-        // Find the lone guard
+        // Find the lone guard who is on duty
         for (Player player : Bukkit.getOnlinePlayers()) {
-            if (isPlayerGuard(player)) {
+            if (isPlayerOnDutyGuard(player)) {
                 loneGuard = player;
                 break;
             }
@@ -175,23 +162,35 @@ public class GuardBuffManager {
             buffedGuards.add(buffedGuard);
 
             // Send message
-            Component message = MessageUtils.parseMessage(applyMessage);
+            Component message = MessageUtils.parseMessage(config.applyMessage);
             loneGuard.sendMessage(message);
         }
+    }
+
+    /**
+     * Remove all active buffs immediately
+     */
+    private void removeAllBuffs() {
+        for (BuffedGuard buffedGuard : new ArrayList<>(buffedGuards)) {
+            removeBuffsFromPlayer(buffedGuard.getPlayerId());
+        }
+        buffedGuards.clear();
+        removalTasks.values().forEach(BukkitTask::cancel);
+        removalTasks.clear();
     }
 
     /**
      * Schedule the removal of buffs from the lone guard
      */
     private void scheduleLoneGuardBuffRemoval() {
-        if (!buffEnabled || buffedGuards.isEmpty()) return;
+        if (!config.enabled || buffedGuards.isEmpty()) return;
 
         // Find all buffed guards and schedule removal
         for (BuffedGuard buffedGuard : new ArrayList<>(buffedGuards)) {
             Player player = Bukkit.getPlayer(buffedGuard.getPlayerId());
             if (player != null && player.isOnline()) {
                 // Send warning message
-                String warningMsg = removeWarningMessage.replace("{seconds}", String.valueOf(removalDelay));
+                String warningMsg = config.removeWarningMessage.replace("{seconds}", String.valueOf(config.loneGuardRemovalDelay));
                 Component message = MessageUtils.parseMessage(warningMsg);
                 player.sendMessage(message);
 
@@ -200,7 +199,7 @@ public class GuardBuffManager {
                 BukkitTask task = Bukkit.getScheduler().runTaskLater(plugin, () -> {
                     removeBuffsFromPlayer(playerId);
                     removalTasks.remove(playerId);
-                }, removalDelay * 20L);
+                }, config.loneGuardRemovalDelay * 20L);
 
                 // Store task for potential cancellation
                 removalTasks.put(playerId, task);
@@ -234,7 +233,7 @@ public class GuardBuffManager {
                 }
 
                 // Send message
-                Component message = MessageUtils.parseMessage(removedMessage);
+                Component message = MessageUtils.parseMessage(config.removedMessage);
                 player.sendMessage(message);
             }
 
@@ -244,37 +243,50 @@ public class GuardBuffManager {
     }
 
     /**
-     * Handle a guard joining the server
-     * @param player The player who joined
+     * Handle a guard joining the server or going on duty
+     * @param player The player who joined or went on duty
      */
     public void onGuardJoin(Player player) {
-        if (!buffEnabled) return;
+        if (!config.enabled) return;
 
-        setOnlineGuardCount(onlineGuardCount + 1);
+        if (isPlayerOnDutyGuard(player)) {
+            setOnlineGuardCount(onlineGuardCount + 1);
+        }
     }
 
     /**
-     * Handle a guard leaving the server
-     * @param player The player who left
+     * Handle a guard leaving the server or going off duty
+     * @param player The player who left or went off duty
      */
     public void onGuardQuit(Player player) {
-        if (!buffEnabled) return;
+        if (!config.enabled) return;
 
-        setOnlineGuardCount(Math.max(0, onlineGuardCount - 1));
+        if (isPlayerOnDutyGuard(player)) {
+            setOnlineGuardCount(Math.max(0, onlineGuardCount - 1));
+        }
     }
 
     /**
-     * Check if a player is a guard
+     * Check if a player is a guard and on duty
      * @param player The player to check
-     * @return True if the player is a guard
+     * @return True if the player is a guard and on duty
+     */
+    public boolean isPlayerOnDutyGuard(Player player) {
+        return isPlayerGuard(player) && plugin.getDutyManager().isOnDuty(player.getUniqueId());
+    }
+
+    /**
+     * Check if a player has guard permissions
+     * @param player The player to check
+     * @return True if the player has guard permissions
      */
     public boolean isPlayerGuard(Player player) {
-        return player.hasPermission("edenprison.guard") || player.hasPermission("edencorrections.duty");
+        return player.hasPermission("edencorrections.guard") || player.hasPermission("edencorrections.duty");
     }
 
     /**
-     * Get the current number of online guards
-     * @return Number of online guards
+     * Get the current number of online guards who are on duty
+     * @return Number of online guards on duty
      */
     public int getOnlineGuardCount() {
         return onlineGuardCount;
@@ -285,14 +297,7 @@ public class GuardBuffManager {
      */
     public void reload() {
         // Clear current state
-        for (BuffedGuard buffedGuard : new ArrayList<>(buffedGuards)) {
-            removeBuffsFromPlayer(buffedGuard.getPlayerId());
-        }
-
-        for (BukkitTask task : removalTasks.values()) {
-            task.cancel();
-        }
-        removalTasks.clear();
+        removeAllBuffs();
 
         // Reload config
         loadConfig();

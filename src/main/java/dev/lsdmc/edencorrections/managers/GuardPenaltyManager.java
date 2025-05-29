@@ -1,7 +1,7 @@
 package dev.lsdmc.edencorrections.managers;
 
 import dev.lsdmc.edencorrections.EdenCorrections;
-import dev.lsdmc.edencorrections.listeners.GuardPenaltyListener;
+import dev.lsdmc.edencorrections.config.ConfigManager;
 import dev.lsdmc.edencorrections.utils.MessageUtils;
 import net.kyori.adventure.text.Component;
 import org.bukkit.Bukkit;
@@ -18,13 +18,12 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Manages guard death penalties
+ * Updated to use centralized configuration management
  */
 public class GuardPenaltyManager {
     private final EdenCorrections plugin;
-    private boolean penaltiesEnabled;
-    private int lockTime;
-    private final Set<String> restrictedRegions = new HashSet<>();
-    private String restrictionMessage;
+    private final ConfigManager configManager;
+    private ConfigManager.GuardPenaltyConfig config;
 
     // Track players with active penalties
     private final Map<UUID, Integer> lockedPlayers = new ConcurrentHashMap<>();
@@ -32,34 +31,21 @@ public class GuardPenaltyManager {
 
     public GuardPenaltyManager(EdenCorrections plugin) {
         this.plugin = plugin;
+        this.configManager = plugin.getConfigManager();
         loadConfig();
-
-        // Register this manager with the plugin
-        plugin.getServer().getPluginManager().registerEvents(new GuardPenaltyListener(this, plugin), plugin);
 
         // Start penalty tick task
         startPenaltyTask();
     }
 
     private void loadConfig() {
-        penaltiesEnabled = plugin.getConfig().getBoolean("guard-death-penalties.enabled", true);
+        this.config = configManager.getGuardPenaltyConfig();
 
-        // Only process the rest if the feature is enabled
-        if (penaltiesEnabled) {
-            lockTime = plugin.getConfig().getInt("guard-death-penalties.lock-time", 60);
-
-            // Load restricted regions
-            restrictedRegions.clear();
-            List<String> regions = plugin.getConfig().getStringList("guard-death-penalties.restricted-regions");
-            restrictedRegions.addAll(regions);
-
-            // Load message
-            restrictionMessage = plugin.getConfig().getString("guard-death-penalties.message",
-                    "&8[&4&l𝕏&8] &7You cannot leave for &c{time} seconds &7for dying!");
-
-            // If no regions are defined, add a default
-            if (restrictedRegions.isEmpty()) {
-                restrictedRegions.add("guardeath");
+        if (configManager.isDebugEnabled()) {
+            plugin.getLogger().info("Guard death penalties " + (config.enabled ? "enabled" : "disabled"));
+            if (config.enabled) {
+                plugin.getLogger().info("Lock time: " + config.lockTime + " seconds");
+                plugin.getLogger().info("Restricted regions: " + (config.restrictedRegions != null ? config.restrictedRegions.size() : 0));
             }
         }
     }
@@ -78,8 +64,12 @@ public class GuardPenaltyManager {
                     // Notify player if online
                     Player player = Bukkit.getPlayer(playerId);
                     if (player != null && player.isOnline()) {
-                        Component message = MessageUtils.parseMessage("&8[&4&l𝕏&8] &aYou can now leave the guard area!");
+                        Component message = MessageUtils.parseMessage("<green>You can now leave the guard area!</green>");
                         player.sendMessage(message);
+
+                        if (configManager.isDebugEnabled()) {
+                            plugin.getLogger().info("Death penalty expired for " + player.getName());
+                        }
                     }
                 } else {
                     lockedPlayers.put(playerId, current - 1);
@@ -93,16 +83,20 @@ public class GuardPenaltyManager {
      * @param player The guard who died
      */
     public void handleGuardDeath(Player player) {
-        if (!penaltiesEnabled) return;
+        if (!config.enabled) return;
 
         // Apply penalty
         UUID playerId = player.getUniqueId();
-        setPlayerLockTime(playerId, lockTime);
+        setPlayerLockTime(playerId, config.lockTime);
 
         // Notify player
-        Component message = MessageUtils.parseMessage(
-                "&8[&4&l𝕏&8] &7You have been locked in the guard area for &c" + lockTime + " seconds &7due to dying!");
-        player.sendMessage(message);
+        String message = config.message.replace("{time}", String.valueOf(config.lockTime));
+        Component component = MessageUtils.parseMessage(message);
+        player.sendMessage(component);
+
+        if (configManager.isDebugEnabled()) {
+            plugin.getLogger().info("Applied death penalty to " + player.getName() + " for " + config.lockTime + " seconds");
+        }
     }
 
     /**
@@ -110,14 +104,19 @@ public class GuardPenaltyManager {
      * @param player The player to apply the penalty to
      */
     public void applyDeathPenalty(Player player) {
-        if (!penaltiesEnabled) return;
+        if (!config.enabled) return;
 
         UUID playerId = player.getUniqueId();
-        setPlayerLockTime(playerId, lockTime);
+        setPlayerLockTime(playerId, config.lockTime);
 
         // Notify player
-        String message = restrictionMessage.replace("{time}", String.valueOf(lockTime));
-        player.sendMessage(MessageUtils.parseMessage(message));
+        String message = config.message.replace("{time}", String.valueOf(config.lockTime));
+        Component component = MessageUtils.parseMessage(message);
+        player.sendMessage(component);
+
+        if (configManager.isDebugEnabled()) {
+            plugin.getLogger().info("Applied death penalty to " + player.getName() + " for " + config.lockTime + " seconds");
+        }
     }
 
     /**
@@ -170,7 +169,13 @@ public class GuardPenaltyManager {
      * @param playerId The player's UUID
      */
     public void clearPlayerLockTime(UUID playerId) {
-        lockedPlayers.remove(playerId);
+        boolean hadPenalty = lockedPlayers.remove(playerId) != null;
+
+        if (hadPenalty && configManager.isDebugEnabled()) {
+            Player player = Bukkit.getPlayer(playerId);
+            String playerName = player != null ? player.getName() : playerId.toString();
+            plugin.getLogger().info("Cleared death penalty for " + playerName);
+        }
     }
 
     /**
@@ -179,7 +184,8 @@ public class GuardPenaltyManager {
      * @return True if the region is restricted
      */
     public boolean isRestrictedRegion(String regionName) {
-        return restrictedRegions.contains(regionName);
+        if (config.restrictedRegions == null) return false;
+        return config.restrictedRegions.contains(regionName);
     }
 
     /**
@@ -187,7 +193,8 @@ public class GuardPenaltyManager {
      * @return Set of restricted regions
      */
     public Set<String> getRestrictedRegions() {
-        return new HashSet<>(restrictedRegions);
+        if (config.restrictedRegions == null) return new HashSet<>();
+        return new HashSet<>(config.restrictedRegions);
     }
 
     /**
@@ -196,10 +203,38 @@ public class GuardPenaltyManager {
      */
     public void handleRestrictedRegionExit(Player player) {
         int timeLeft = getPlayerLockTime(player.getUniqueId());
-        String message = restrictionMessage.replace("{time}", String.valueOf(timeLeft));
+        String message = config.message.replace("{time}", String.valueOf(timeLeft));
 
         Component component = MessageUtils.parseMessage(message);
         player.sendMessage(component);
+
+        if (configManager.isDebugEnabled()) {
+            plugin.getLogger().info("Blocked " + player.getName() + " from leaving restricted region (penalty: " + timeLeft + "s)");
+        }
+    }
+
+    /**
+     * Get the configured lock time
+     * @return Lock time in seconds
+     */
+    public int getConfiguredLockTime() {
+        return config.lockTime;
+    }
+
+    /**
+     * Get all players with active penalties
+     * @return Map of player UUIDs to remaining penalty time
+     */
+    public Map<UUID, Integer> getActivePenalties() {
+        return new ConcurrentHashMap<>(lockedPlayers);
+    }
+
+    /**
+     * Check how many players currently have active penalties
+     * @return Number of players with active penalties
+     */
+    public int getActivePenaltyCount() {
+        return lockedPlayers.size();
     }
 
     /**
@@ -207,6 +242,7 @@ public class GuardPenaltyManager {
      */
     public void reload() {
         loadConfig();
+        plugin.getLogger().info("GuardPenaltyManager reloaded successfully");
     }
 
     /**
@@ -214,6 +250,21 @@ public class GuardPenaltyManager {
      * @return True if enabled
      */
     public boolean arePenaltiesEnabled() {
-        return penaltiesEnabled;
+        return config.enabled;
+    }
+
+    /**
+     * Shutdown the manager and clear all tasks
+     */
+    public void shutdown() {
+        // Cancel all penalty tasks
+        for (BukkitTask task : penaltyTasks.values()) {
+            task.cancel();
+        }
+        penaltyTasks.clear();
+
+        if (configManager.isDebugEnabled()) {
+            plugin.getLogger().info("GuardPenaltyManager shutdown");
+        }
     }
 }

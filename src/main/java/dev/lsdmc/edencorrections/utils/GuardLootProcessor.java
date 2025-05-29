@@ -30,47 +30,93 @@ public class GuardLootProcessor {
     public List<ItemStack> generateLootForPlayer(Player player) {
         List<ItemStack> loot = new ArrayList<>();
 
-        // Get the player's rank
-        String rank = rankManager.getPlayerRank(player);
-        if (rank == null) return loot;
+        try {
+            // Get the player's rank
+            String rank = rankManager.getPlayerRank(player);
+            if (rank == null) {
+                plugin.getLogger().warning("No rank found for player " + player.getName() + ", using default loot table");
+                rank = "trainee";
+            }
 
-        // Log the rank detection for debugging
-        plugin.getLogger().info("Generating loot for " + player.getName() + " with rank: " + rank);
+            // Log the rank detection for debugging
+            if (plugin.getConfigManager().isDebugEnabled()) {
+                plugin.getLogger().info("Generating loot for " + player.getName() + " with rank: " + rank);
+            }
 
-        // Get the loot table for the rank
-        String configPath = "guard-loot.ranks." + rank;
-        if (!plugin.getConfig().contains(configPath)) {
-            plugin.getLogger().warning("No loot table found for rank: " + rank);
-            return loot;
-        }
+            // Get the loot table for the rank
+            String configPath = "guard-loot.ranks." + rank;
+            if (!plugin.getConfig().contains(configPath)) {
+                plugin.getLogger().warning("No loot table found for rank: " + rank + ", falling back to trainee");
+                configPath = "guard-loot.ranks.trainee";
+                if (!plugin.getConfig().contains(configPath)) {
+                    plugin.getLogger().severe("No fallback loot table found! Check configuration.");
+                    return loot;
+                }
+            }
 
-        // Process armor items
-        plugin.getLogger().info("Processing armor items for " + player.getName());
-        loot.addAll(processLootCategory(player, configPath + ".armor"));
+            // Process armor items with better error handling
+            try {
+                plugin.getLogger().info("Processing armor items for " + player.getName());
+                loot.addAll(processLootCategory(player, configPath + ".armor"));
+            } catch (Exception e) {
+                plugin.getLogger().warning("Error processing armor items for " + player.getName() + ": " + e.getMessage());
+            }
 
-        // Process weapon items
-        plugin.getLogger().info("Processing weapon items for " + player.getName());
-        loot.addAll(processLootCategory(player, configPath + ".weapons"));
+            // Process weapon items with better error handling
+            try {
+                plugin.getLogger().info("Processing weapon items for " + player.getName());
+                loot.addAll(processLootCategory(player, configPath + ".weapons"));
+            } catch (Exception e) {
+                plugin.getLogger().warning("Error processing weapon items for " + player.getName() + ": " + e.getMessage());
+            }
 
-        // Process resource items
-        plugin.getLogger().info("Processing resource items for " + player.getName());
-        loot.addAll(processLootCategory(player, configPath + ".resources"));
+            // Process resource items with better error handling
+            try {
+                plugin.getLogger().info("Processing resource items for " + player.getName());
+                loot.addAll(processLootCategory(player, configPath + ".resources"));
+            } catch (Exception e) {
+                plugin.getLogger().warning("Error processing resource items for " + player.getName() + ": " + e.getMessage());
+            }
 
-        // Always add a shield for all ranks if not configured
-        boolean hasShield = loot.stream().anyMatch(item -> item.getType() == Material.SHIELD);
-        if (!hasShield) {
-            plugin.getLogger().info("Adding default shield for " + player.getName() + " as none was found in config");
-            loot.add(new ItemStack(Material.SHIELD));
-        }
+            // Always ensure basic equipment
+            ensureBasicEquipment(loot);
 
-        // Log all generated loot items
-        plugin.getLogger().info("Generated " + loot.size() + " loot items for " + player.getName());
-        for (ItemStack item : loot) {
-            plugin.getLogger().info("Loot item: " + item.getType() + " x" + item.getAmount() +
-                    (item.getEnchantments().size() > 0 ? " with " + item.getEnchantments().size() + " enchantments" : ""));
+            // Log all generated loot items
+            if (plugin.getConfigManager().isDebugEnabled()) {
+                plugin.getLogger().info("Generated " + loot.size() + " loot items for " + player.getName());
+                for (ItemStack item : loot) {
+                    plugin.getLogger().info("Loot item: " + item.getType() + " x" + item.getAmount() +
+                            (item.getEnchantments().size() > 0 ? " with " + item.getEnchantments().size() + " enchantments" : ""));
+                }
+            }
+
+        } catch (Exception e) {
+            plugin.getLogger().severe("Critical error generating loot for " + player.getName() + ": " + e.getMessage());
+            e.printStackTrace();
+            // Ensure player gets at least basic equipment even if there's an error
+            ensureBasicEquipment(loot);
         }
 
         return loot;
+    }
+
+    private void ensureBasicEquipment(List<ItemStack> loot) {
+        // Check for and add basic equipment if missing
+        boolean hasChestplate = false;
+        boolean hasSword = false;
+        boolean hasShield = false;
+
+        for (ItemStack item : loot) {
+            Material type = item.getType();
+            if (type == Material.IRON_CHESTPLATE || type == Material.DIAMOND_CHESTPLATE) hasChestplate = true;
+            if (type == Material.IRON_SWORD || type == Material.DIAMOND_SWORD) hasSword = true;
+            if (type == Material.SHIELD) hasShield = true;
+        }
+
+        // Add missing basic equipment
+        if (!hasChestplate) loot.add(new ItemStack(Material.IRON_CHESTPLATE));
+        if (!hasSword) loot.add(new ItemStack(Material.IRON_SWORD));
+        if (!hasShield) loot.add(new ItemStack(Material.SHIELD));
     }
 
     private List<ItemStack> processLootCategory(Player player, String configPath) {
