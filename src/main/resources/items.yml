@@ -1,0 +1,225 @@
+# =================================
+# Eden Corrections - Guard Items Configuration
+# All settings for guard equipment and items
+# =================================
+
+# =================================
+# Handcuffs Configuration
+# =================================
+handcuffs:
+  material: LEAD
+  name: "§c§lHandcuffs"
+  lore:
+    - "§7Right-click on a player to cuff them"
+    - "§7Hold still during the countdown or they'll escape!"
+    - "§7If they run away, a chase will begin!"
+    - ""
+    - "§c§lGuard Item"
+  # Maximum range for handcuffing
+  range: 5.0
+  max-distance: 5.0
+  # Countdown time before cuffing completes
+  countdown: 5
+  # Cooldown between uses (seconds)
+  cooldown: 30
+  # Whether to protect other guards from being cuffed
+  protect-guards: true
+  # Regions where handcuffs cannot be used
+  safe-regions:
+    - "spawn"
+    - "safe_zone"
+  # Rewards for successful arrests
+  reward:
+    base: 250
+    per-level: 150
+
+# =================================
+# Drug Sniffer Configuration
+# =================================
+drug-sniffer:
+  material: WARPED_FUNGUS_ON_A_STICK
+  name: "§d§lDrug Sniffer"
+  lore:
+    - "§7Right-click on a player to test for drugs"
+    - "§7Detects illegal substances and drug influence"
+    - "§7Takes time to analyze - don't move!"
+    - ""
+    - "§d§lGuard Item"
+  # Detection range
+  range: 5.0
+  # Analysis countdown time
+  countdown: 5
+  # Cooldown between uses (seconds)
+  cooldown: 30
+  # Rewards for drug testing
+  reward:
+    no-find: 250
+    per-drug: 50
+
+# =================================
+# Metal Detector Configuration
+# =================================
+metal-detector:
+  material: CLOCK
+  name: "§8§lMetal Detector"
+  lore:
+    - "§7Right-click on a player to scan for metal"
+    - "§7Detects weapons, tools, and metal items"
+    - "§7Thorough scan takes time to complete"
+    - ""
+    - "§8§lGuard Item"
+  # Scan countdown time
+  countdown: 10
+  # Cooldown between uses (seconds) - 30 minutes
+  cooldown: 1800
+  # Rewards for metal detection
+  reward:
+    find: 250
+    no-find: 250
+
+# =================================
+# Spyglass Configuration
+# =================================
+spyglass:
+  material: SPYGLASS
+  name: "§e§lGuard Spyglass"
+  lore:
+    - "§7Right-click on a player to mark them"
+    - "§7Target must have 3+ wanted stars"
+    - "§7Marked players glow red for all guards"
+    - "§7Mark persists until death/jail/wanted cleared"
+    - ""
+    - "§e§lGuard Item"
+  # Maximum marking range
+  range: 10.0
+  # Cooldown between uses (seconds)
+  cooldown: 30
+  # Minimum wanted level required to mark a player
+  min-wanted-level: 3
+
+# =================================
+# Prison Remote Configuration
+# =================================
+prison-remote:
+  material: REDSTONE_TORCH
+  name: "§4§lPrison Remote"
+  lore:
+    - "§7Right-click to initiate prison lockdown"
+    - "§7Locks down all prisoners for safety"
+    - "§7Emergency use only - long cooldown"
+    - ""
+    - "§4§lGuard Item"
+  # Duration of lockdown effects (seconds)
+  lockdown-duration: 30
+  # Cooldown between uses (seconds) - 20 minutes
+  cooldown: 1200
+
+# =================================
+# Guard Baton Configuration
+# =================================
+guard-baton:
+  material: STICK
+  name: "§6§lGuard Baton"
+  lore:
+    - "§7Right-click on a player to stun them"
+    - "§7Applies slowness effect for crowd control"
+    - "§7Only works in PvP combat situations"
+    - ""
+    - "§6§lGuard Item"
+  # Maximum striking distance
+  max-distance: 3.0
+  # Duration of slowness effect
+  slowness-duration: 5
+  # Whether baton only works in PvP areas
+  pvp-only: true
+
+# =================================
+# Taser Configuration
+# =================================
+taser:
+  material: TRIPWIRE_HOOK
+  name: "§e§lTaser"
+  lore:
+    - "§7Right-click to stun a target"
+    - "§7Causes temporary paralysis"
+    - "§7Range: 8 blocks"
+    - "§7Cooldown: 2 minutes"
+    - ""
+    - "§e§lGuard Equipment"
+  # Maximum tasing distance
+  max-distance: 8.0
+  # Duration of stun effects
+  stun-duration: 2.5
+  # Number of charges dropped on use
+  dropped-charges: 3
+  # Cooldown between uses (seconds)
+  cooldown: 120
+
+# =================================
+# Smoke Bomb Configuration
+# =================================
+smoke-bomb:
+  material: FIRE_CHARGE
+  name: "§8§lSmoke Bomb"
+  lore:
+    - "§7Throw to create a smoke cloud"
+    - "§7Blinds nearby enemies"
+    - "§7Range: 5 blocks"
+    - ""
+    - "§8§lConsumable Item"
+  effects:
+    # Duration of blindness effect
+    blackout-duration: 15
+    # Duration of darkness effect
+    darkness-duration: 30
+    # Effect radius
+    range: 5
+
+# =================================
+# Riot Shield Configuration
+# =================================
+riot-shield:
+  material: SHIELD
+  name: "§c§lRiot Shield"
+  lore:
+    - "§7Right-click to activate protection"
+    - "§7Grants resistance effects"
+    - "§7Duration: 1 minute"
+    - ""
+    - "§c§lRiot Equipment"
+  # Duration of protection effects (seconds)
+  protection-duration: 60
+  # Cooldown between uses (seconds)
+  cooldown: 300
+
+# =================================
+# Sobriety Test Configuration
+# =================================
+sobriety-test:
+  material: PAPER
+  name: "§f§lSobriety Test"
+  lore:
+    - "§7Right-click to test for intoxication"
+    - "§7Detects drug and alcohol influence"
+    - "§7Quick field test"
+    - ""
+    - "§f§lGuard Equipment"
+  # Cooldown between uses (seconds)
+  cooldown: 60
+  # Rewards for sobriety testing
+  reward:
+    pass: 150
+    fail: 300
+
+# =================================
+# General Item Settings
+# =================================
+general:
+  # Whether guard items are protected from dropping on death
+  protect-on-death: true
+  # Whether guard items disappear when going off duty
+  remove-on-off-duty: true
+  # Maximum distance for any guard item interaction
+  global-max-range: 15.0
+  # Global cooldown to prevent spam clicking (milliseconds)
+  spam-protection-cooldown: 1000 

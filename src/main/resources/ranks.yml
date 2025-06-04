@@ -1,0 +1,241 @@
+# =================================
+# Eden Corrections - Guard Ranks & Progression Configuration
+# All settings for guard ranks, progression, and perks
+# =================================
+
+# =================================
+# Guard Progression System
+# =================================
+progression:
+  # Points required to reach each rank
+  thresholds:
+    trainee: 0
+    private: 1000
+    officer: 3000
+    sergeant: 6000
+    warden: 10000
+
+  # Points awarded for various activities
+  rewards:
+    search: 10
+    successful-search: 25
+    metal-detect: 15
+    apprehension: 50
+    chase-complete: 50
+    contraband-found: 30
+    drug-detection: 20
+    wanted-level-increase: 15
+
+  # Whether to announce rank promotions to the server
+  announce-promotions: true
+  # Whether to give rewards for rank ups
+  rank-up-rewards: true
+
+# =================================
+# Guard Rank Definitions
+# =================================
+ranks:
+  trainee:
+    display-name: "§7Trainee"
+    description: "Entry-level guard position"
+    daily-tokens: 150
+    # Items this rank can use
+    can-use: 
+      - "handcuffs"
+      - "guard-baton"
+    # Passive buffs for this rank (while on duty)
+    buffs: []
+    # Special permissions for this rank
+    rank-permissions:
+      - "edencorrections.rank.trainee"
+      - "edencorrections.use"
+      - "edencorrections.duty"
+      - "edencorrections.duty.check"
+
+  private:
+    display-name: "§aPrivate"
+    description: "Basic guard with expanded privileges"
+    daily-tokens: 300
+    can-use: 
+      - "handcuffs"
+      - "guard-baton"
+      - "drug-sniffer"
+    buffs: 
+      - "SPEED:1"
+    rank-permissions:
+      - "edencorrections.rank.private"
+      - "edencorrections.guard"
+      - "edencorrections.duty"
+      - "edencorrections.duty.check"
+      - "edencorrections.duty.actions"
+
+  officer:
+    display-name: "§bOfficer"
+    description: "Experienced guard with investigation tools"
+    daily-tokens: 500
+    can-use: 
+      - "handcuffs"
+      - "guard-baton"
+      - "drug-sniffer"
+      - "metal-detector"
+      - "spyglass"
+    buffs: 
+      - "SPEED:1"
+      - "STRENGTH:1"
+    rank-permissions:
+      - "edencorrections.rank.officer"
+      - "edencorrections.guard"
+      - "edencorrections.duty"
+      - "edencorrections.duty.check"
+      - "edencorrections.duty.actions"
+      - "edencorrections.guard.items"
+
+  sergeant:
+    display-name: "§eSergeant"
+    description: "Senior guard with advanced equipment"
+    daily-tokens: 750
+    can-use: 
+      - "handcuffs"
+      - "guard-baton"
+      - "drug-sniffer"
+      - "metal-detector"
+      - "spyglass"
+      - "taser"
+      - "smoke-bomb"
+    buffs: 
+      - "SPEED:1"
+      - "STRENGTH:1"
+      - "RESISTANCE:1"
+    rank-permissions:
+      - "edencorrections.rank.sergeant"
+      - "edencorrections.guard"
+      - "edencorrections.duty"
+      - "edencorrections.duty.check"
+      - "edencorrections.duty.actions"
+      - "edencorrections.guard.items"
+      - "edencorrections.guard.chase"
+      - "edencorrections.guard.jail"
+
+  warden:
+    display-name: "§cWarden"
+    description: "Highest ranking guard with full authority"
+    daily-tokens: 1000
+    can-use: 
+      - "handcuffs"
+      - "guard-baton"
+      - "drug-sniffer"
+      - "metal-detector"
+      - "spyglass"
+      - "taser"
+      - "smoke-bomb"
+      - "riot-shield"
+      - "prison-remote"
+    buffs: 
+      - "SPEED:2"
+      - "STRENGTH:1"
+      - "RESISTANCE:1"
+      - "NIGHT_VISION:1"
+    rank-permissions:
+      - "edencorrections.rank.warden"
+      - "edencorrections.guard"
+      - "edencorrections.duty"
+      - "edencorrections.duty.check"
+      - "edencorrections.duty.actions"
+      - "edencorrections.guard.items"
+      - "edencorrections.guard.chase"
+      - "edencorrections.guard.jail"
+      - "edencorrections.progression"
+      - "edencorrections.shop"
+      - "edencorrections.admin.basic"
+
+# =================================
+# LuckPerms Integration
+# =================================
+luckperms:
+  # Whether to use LuckPerms groups for rank management
+  enabled: true
+  # Group names in LuckPerms that correspond to guard ranks
+  group-names:
+    trainee: "guard_trainee"
+    private: "guard_private"
+    officer: "guard_officer"
+    sergeant: "guard_sergeant"
+    warden: "guard_warden"
+  # Whether to auto-assign groups on rank up
+  auto-assign-groups: true
+  # Whether to remove old groups on rank up
+  remove-old-groups: true
+
+# =================================
+# Rank-Up Rewards
+# =================================
+rank-rewards:
+  # Tokens given on rank promotion
+  tokens:
+    private: 500
+    officer: 1000
+    sergeant: 2000
+    warden: 5000
+  
+  # Off-duty time given on rank promotion (minutes)
+  off-duty-time:
+    private: 60
+    officer: 120
+    sergeant: 180
+    warden: 300
+
+  # Commands executed on rank up (use {player} placeholder)
+  commands:
+    private:
+      - "cmi kit private {player}"
+      - "broadcast {player} has been promoted to Private!"
+    officer:
+      - "cmi kit officer {player}"
+      - "broadcast {player} has been promoted to Officer!"
+    sergeant:
+      - "cmi kit sergeant {player}"
+      - "broadcast {player} has been promoted to Sergeant!"
+    warden:
+      - "cmi kit warden {player}"
+      - "broadcast {player} has been promoted to Warden!"
+
+# =================================
+# Daily Token System
+# =================================
+daily-tokens:
+  # Whether to give daily tokens based on rank
+  enabled: true
+  # Time when daily tokens reset (24-hour format: HH:MM)
+  reset-time: "00:00"
+  # Whether to notify players when they receive daily tokens
+  notify-on-receive: true
+  # Whether to stack tokens if player misses days
+  allow-stacking: false
+  # Maximum days that can be stacked
+  max-stack-days: 3
+
+# =================================
+# Rank Display Settings
+# =================================
+display:
+  # Format for rank display in chat/commands
+  rank-format: "{color}{rank}"
+  # Whether to show rank in player list/tab
+  show-in-tab: true
+  # Whether to show rank above player name
+  show-nametag: true
+  # Prefix format for chat integration
+  chat-prefix-format: "[{rank}] "
+
+# =================================
+# Buff Management
+# =================================
+buffs:
+  # Whether rank buffs are applied automatically when on duty
+  auto-apply: true
+  # Whether buffs persist through death (while on duty)
+  persist-through-death: true
+  # Whether to show buff application messages
+  show-buff-messages: false
+  # How often to refresh buffs (seconds) - prevents buff loss
+  refresh-interval: 60 

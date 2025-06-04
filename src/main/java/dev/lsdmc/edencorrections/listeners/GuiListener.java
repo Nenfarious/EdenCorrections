@@ -8,12 +8,12 @@ import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryCloseEvent;
-import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryHolder;
 
 /**
  * Listener for GUI-related events
+ * FIXED: Removed PlayerJoinEvent handler to prevent conflicts - consolidated in PlayerListener
  */
 public class GuiListener implements Listener {
     private final EdenCorrections plugin;
@@ -65,9 +65,12 @@ public class GuiListener implements Listener {
                     // Shop menu handler
                     plugin.getGuiManager().handleShopMenuClick(player, event.getSlot());
                     break;
+                case TOKENS_VIEW:
+                    // Token management handler
+                    plugin.getGuiManager().handleTokensViewClick(player, event.getSlot());
+                    break;
                 default:
-                    // Legacy fallback for backward compatibility
-                    plugin.getGuiManager().handleEnhancedGuiClick(player, event.getSlot(), clickedInventory);
+                    // Unknown GUI type - do nothing
                     break;
             }
         } else {
@@ -77,26 +80,6 @@ public class GuiListener implements Listener {
             if (topInventory != null && topInventory.getHolder() instanceof GuiHolder) {
                 event.setCancelled(true);
             }
-        }
-    }
-
-    @EventHandler
-    public void onPlayerJoin(PlayerJoinEvent event) {
-        Player player = event.getPlayer();
-
-        // Check if this player should see the duty selection GUI
-        if (plugin.getGuiManager().shouldShowOnJoin(player)) {
-            // Get delay from config (default: 20 ticks = 1 second)
-            long delay = plugin.getConfig().getLong("gui.join-delay", 20L);
-
-            // Schedule GUI to open after the delay
-            plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
-                // Only show if they're still online
-                if (player.isOnline()) {
-                    // Always open the main menu with the redesigned system
-                    plugin.getGuiManager().openMainMenu(player);
-                }
-            }, delay);
         }
     }
 

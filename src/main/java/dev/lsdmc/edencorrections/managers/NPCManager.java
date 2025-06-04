@@ -1,8 +1,12 @@
 package dev.lsdmc.edencorrections.managers;
 
 import dev.lsdmc.edencorrections.EdenCorrections;
+import dev.lsdmc.edencorrections.config.ConfigManager;
+import dev.lsdmc.edencorrections.utils.MessageUtils;
 import net.citizensnpcs.api.CitizensAPI;
 import net.citizensnpcs.api.npc.NPC;
+import net.citizensnpcs.api.npc.NPCRegistry;
+import net.kyori.adventure.text.Component;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.Location;
@@ -29,32 +33,48 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import java.util.logging.Level;
+import java.util.Map;
+import java.util.HashMap;
 
 public class NPCManager implements Listener {
     private final EdenCorrections plugin;
+    private final ConfigManager configManager;
+    private ConfigManager.InterfaceConfig interfaceConfig;
     private final File npcFile;
     private FileConfiguration npcConfig;
-    private final int interactionRadius;
-    private final boolean useCitizens;
-    private final String npcName;
-    private final NamespacedKey dutyNpcKey;
+    private final Map<String, NPC> dutyNPCs = new HashMap<>();
+    private boolean npcEnabled;
 
-    // List of duty NPC UUIDs (for both ArmorStand and Citizens NPCs)
-    private final List<UUID> dutyNpcs = new ArrayList<>();
+    // List of Corrections NPC UUIDs (for both ArmorStand and Citizens NPCs)
+    private final List<UUID> correctionsNpcs = new ArrayList<>();
 
     // Citizens integration flag
     private boolean citizensEnabled = false;
 
+    // Add per-player cooldown map
+    private final java.util.Map<java.util.UUID, Long> lastNpcInteraction = new java.util.HashMap<>();
+
+    // Key for marking ArmorStand NPCs as EdenCorrections NPCs
+    private final NamespacedKey correctionsNpcKey;
+
+    private final int interactionRadius;
+    private final boolean useCitizens;
+    private final String npcSkin; // Default skin for Citizens NPCs
+
+    public enum NPCType { DUTY, GUI }
+    public enum GuiSection { MAIN, DUTY, STATS, ACTIONS, EQUIPMENT, SHOP, TOKENS }
+
     public NPCManager(EdenCorrections plugin) {
         this.plugin = plugin;
-        this.dutyNpcKey = new NamespacedKey(plugin, "duty_npc");
+        this.configManager = plugin.getConfigManager();
+        this.interfaceConfig = configManager.getInterfaceConfig();
+        this.correctionsNpcKey = new NamespacedKey(plugin, "duty_npc");
 
         // Get config values
-        FileConfiguration config = plugin.getConfig();
-        this.interactionRadius = config.getInt("duty.npc.interaction-radius", 3);
-        this.useCitizens = config.getBoolean("duty.npc.use-citizens", false);
-        this.npcName = ChatColor.translateAlternateColorCodes('&',
-                config.getString("duty.npc.name", "&b&lDuty Officer"));
+        FileConfiguration config = configManager.getConfig("config.yml");
+        this.interactionRadius = config != null ? config.getInt("npc.interaction-radius", 3) : 3;
+        this.useCitizens = config != null ? config.getBoolean("npc.use-citizens", false) : false;
+        this.npcSkin = config != null ? config.getString("npc.skin", "PoliceOfficer") : "PoliceOfficer";
 
         // Check for Citizens
         if (useCitizens && Bukkit.getPluginManager().getPlugin("Citizens") != null) {
@@ -88,7 +108,7 @@ public class NPCManager implements Listener {
      * Load all NPCs from configuration
      */
     private void loadNpcs() {
-        dutyNpcs.clear();
+        correctionsNpcs.clear();
 
         ConfigurationSection section = npcConfig.getConfigurationSection("npcs");
         if (section == null) return;
@@ -97,7 +117,7 @@ public class NPCManager implements Listener {
         for (String key : section.getKeys(false)) {
             try {
                 UUID npcUuid = UUID.fromString(key);
-                dutyNpcs.add(npcUuid);
+                correctionsNpcs.add(npcUuid);
 
                 // For ArmorStand NPCs, verify they still exist
                 if (!citizensEnabled || !section.getBoolean(key + ".citizens")) {
@@ -119,7 +139,7 @@ public class NPCManager implements Listener {
                     // If not found, remove from list
                     if (!found) {
                         plugin.getLogger().warning("NPC with UUID " + npcUuid + " not found in world " + worldName);
-                        dutyNpcs.remove(npcUuid);
+                        correctionsNpcs.remove(npcUuid);
                         section.set(key, null);
                     }
                 }
@@ -137,53 +157,58 @@ public class NPCManager implements Listener {
     }
 
     /**
-     * Create a duty NPC at the specified location
+     * Create a Corrections NPC at the specified location
      * @param location The location to create the NPC at
      * @param createdBy The player who created the NPC
+     * @param name The name of the NPC
+     * @param type The type of the NPC
+     * @param guiSection The GUI section of the NPC
      * @return True if NPC was created successfully, false otherwise
      */
-    public boolean createNpc(Location location, Player createdBy) {
+    public boolean createNpc(Location location, Player createdBy, String name, NPCType type, GuiSection guiSection) {
         if (citizensEnabled) {
-            return createCitizensNpc(location, createdBy);
+            return createCitizensNpc(location, createdBy, name, type, guiSection);
         } else {
-            return createArmorStandNpc(location, createdBy);
+            return createArmorStandNpc(location, createdBy, name, type, guiSection);
         }
+    }
+
+    /**
+     * Overload for backward compatibility
+     * @param location The location to create the NPC at
+     * @param createdBy The player who created the NPC
+     * @param name The name of the NPC
+     * @return True if NPC was created successfully, false otherwise
+     */
+    public boolean createNpc(Location location, Player createdBy, String name) {
+        return createNpc(location, createdBy, name, NPCType.DUTY, null);
     }
 
     /**
      * Create a Citizens NPC at the specified location
      */
-    private boolean createCitizensNpc(Location location, Player createdBy) {
+    private boolean createCitizensNpc(Location location, Player createdBy, String name, NPCType type, GuiSection guiSection) {
         try {
-            // Create Citizens NPC using their API
             CitizensAPI.getNPCRegistry();
-            NPC npc = CitizensAPI.getNPCRegistry().createNPC(
-                    EntityType.PLAYER, npcName);
-
-            // Set NPC traits
+            NPC npc = CitizensAPI.getNPCRegistry().createNPC(EntityType.PLAYER, name);
             npc.data().setPersistent(NPC.Metadata.NAMEPLATE_VISIBLE, true);
-            npc.data().setPersistent("player-skin-name", "Police");
-
-            // Spawn the NPC
+            npc.data().setPersistent("player-skin-name", npcSkin);
             npc.spawn(location);
-
-            // Save NPC info
             UUID npcUuid = npc.getEntity().getUniqueId();
-            dutyNpcs.add(npcUuid);
-
-            npcConfig.set("npcs." + npcUuid.toString() + ".citizens", true);
-            npcConfig.set("npcs." + npcUuid.toString() + ".world", location.getWorld().getName());
-            npcConfig.set("npcs." + npcUuid.toString() + ".x", location.getX());
-            npcConfig.set("npcs." + npcUuid.toString() + ".y", location.getY());
-            npcConfig.set("npcs." + npcUuid.toString() + ".z", location.getZ());
-            npcConfig.set("npcs." + npcUuid.toString() + ".created-by", createdBy.getUniqueId().toString());
-
-            try {
-                npcConfig.save(npcFile);
-            } catch (IOException e) {
-                plugin.getLogger().log(Level.SEVERE, "Failed to save npcs.yml", e);
+            correctionsNpcs.add(npcUuid);
+            String base = "npcs." + npcUuid.toString();
+            npcConfig.set(base + ".citizens", true);
+            npcConfig.set(base + ".world", location.getWorld().getName());
+            npcConfig.set(base + ".x", location.getX());
+            npcConfig.set(base + ".y", location.getY());
+            npcConfig.set(base + ".z", location.getZ());
+            npcConfig.set(base + ".created-by", createdBy.getUniqueId().toString());
+            npcConfig.set(base + ".name", name);
+            npcConfig.set(base + ".type", type.name());
+            if (type == NPCType.GUI && guiSection != null) {
+                npcConfig.set(base + ".gui-section", guiSection.name());
             }
-
+            try { npcConfig.save(npcFile); } catch (IOException e) { plugin.getLogger().log(Level.SEVERE, "Failed to save npcs.yml", e); }
             return true;
         } catch (Exception e) {
             plugin.getLogger().log(Level.SEVERE, "Failed to create Citizens NPC", e);
@@ -194,57 +219,48 @@ public class NPCManager implements Listener {
     /**
      * Create an ArmorStand NPC at the specified location
      */
-    private boolean createArmorStandNpc(Location location, Player createdBy) {
+    private boolean createArmorStandNpc(Location location, Player createdBy, String name, NPCType type, GuiSection guiSection) {
         try {
-            // Spawn armor stand
             ArmorStand armorStand = (ArmorStand) location.getWorld().spawnEntity(location, EntityType.ARMOR_STAND);
-
-            // Configure armor stand
-            armorStand.setCustomName(npcName);
+            armorStand.setCustomName(name);
             armorStand.setCustomNameVisible(true);
             armorStand.setVisible(true);
-            armorStand.setSmall(false);
-            armorStand.setArms(true);
-            armorStand.setBasePlate(true);
             armorStand.setGravity(false);
             armorStand.setInvulnerable(true);
-
-            // Mark as duty NPC
+            armorStand.setCollidable(false);
+            armorStand.setBasePlate(false);
+            armorStand.setArms(true);
             PersistentDataContainer container = armorStand.getPersistentDataContainer();
-            container.set(dutyNpcKey, PersistentDataType.BYTE, (byte) 1);
-
-            // Add to list
+            container.set(correctionsNpcKey, PersistentDataType.BYTE, (byte) 1);
             UUID npcUuid = armorStand.getUniqueId();
-            dutyNpcs.add(npcUuid);
-
-            // Save to config
-            npcConfig.set("npcs." + npcUuid.toString() + ".citizens", false);
-            npcConfig.set("npcs." + npcUuid.toString() + ".world", location.getWorld().getName());
-            npcConfig.set("npcs." + npcUuid.toString() + ".x", location.getX());
-            npcConfig.set("npcs." + npcUuid.toString() + ".y", location.getY());
-            npcConfig.set("npcs." + npcUuid.toString() + ".z", location.getZ());
-            npcConfig.set("npcs." + npcUuid.toString() + ".created-by", createdBy.getUniqueId().toString());
-
-            try {
-                npcConfig.save(npcFile);
-            } catch (IOException e) {
-                plugin.getLogger().log(Level.SEVERE, "Failed to save npcs.yml", e);
+            correctionsNpcs.add(npcUuid);
+            String base = "npcs." + npcUuid.toString();
+            npcConfig.set(base + ".citizens", false);
+            npcConfig.set(base + ".world", location.getWorld().getName());
+            npcConfig.set(base + ".x", location.getX());
+            npcConfig.set(base + ".y", location.getY());
+            npcConfig.set(base + ".z", location.getZ());
+            npcConfig.set(base + ".created-by", createdBy.getUniqueId().toString());
+            npcConfig.set(base + ".name", name);
+            npcConfig.set(base + ".type", type.name());
+            if (type == NPCType.GUI && guiSection != null) {
+                npcConfig.set(base + ".gui-section", guiSection.name());
             }
-
+            try { npcConfig.save(npcFile); } catch (IOException e) { plugin.getLogger().log(Level.SEVERE, "Failed to save npcs.yml", e); }
             return true;
         } catch (Exception e) {
-            plugin.getLogger().log(Level.SEVERE, "Failed to create armor stand NPC", e);
+            plugin.getLogger().log(Level.SEVERE, "Failed to create ArmorStand NPC", e);
             return false;
         }
     }
 
     /**
-     * Remove a duty NPC
+     * Remove a Corrections NPC
      * @param npcUuid The UUID of the NPC to remove
      * @return True if NPC was removed successfully, false otherwise
      */
     public boolean removeNpc(UUID npcUuid) {
-        if (!dutyNpcs.contains(npcUuid)) {
+        if (!correctionsNpcs.contains(npcUuid)) {
             return false;
         }
 
@@ -254,7 +270,7 @@ public class NPCManager implements Listener {
 
         if (worldName == null) {
             // Just remove from list and config
-            dutyNpcs.remove(npcUuid);
+            correctionsNpcs.remove(npcUuid);
             npcConfig.set("npcs." + npcUuid.toString(), null);
             try {
                 npcConfig.save(npcFile);
@@ -267,7 +283,7 @@ public class NPCManager implements Listener {
         World world = Bukkit.getWorld(worldName);
         if (world == null) {
             // World doesn't exist, just remove from list and config
-            dutyNpcs.remove(npcUuid);
+            correctionsNpcs.remove(npcUuid);
             npcConfig.set("npcs." + npcUuid.toString(), null);
             try {
                 npcConfig.save(npcFile);
@@ -296,7 +312,7 @@ public class NPCManager implements Listener {
         }
 
         // Remove from list and config
-        dutyNpcs.remove(npcUuid);
+        correctionsNpcs.remove(npcUuid);
         npcConfig.set("npcs." + npcUuid.toString(), null);
         try {
             npcConfig.save(npcFile);
@@ -312,28 +328,39 @@ public class NPCManager implements Listener {
      */
     @EventHandler
     public void onNpcInteract(PlayerInteractAtEntityEvent event) {
-        if (event.getHand() != EquipmentSlot.HAND) return;
-
-        Entity entity = event.getRightClicked();
         Player player = event.getPlayer();
-
-        // Check if entity is a duty NPC
-        if (dutyNpcs.contains(entity.getUniqueId()) ||
-                (entity instanceof ArmorStand && entity.getPersistentDataContainer().has(dutyNpcKey, PersistentDataType.BYTE))) {
-            // Handle duty toggle
-            plugin.getDutyManager().toggleDuty(player);
+        long now = System.currentTimeMillis();
+        if (lastNpcInteraction.containsKey(player.getUniqueId()) && now - lastNpcInteraction.get(player.getUniqueId()) < 2000) {
+            event.setCancelled(true);
+            return;
+        }
+        lastNpcInteraction.put(player.getUniqueId(), now);
+        if (event.getHand() != EquipmentSlot.HAND) return;
+        Entity entity = event.getRightClicked();
+        UUID npcUuid = entity.getUniqueId();
+        if (correctionsNpcs.contains(npcUuid) || (entity instanceof ArmorStand && entity.getPersistentDataContainer().has(correctionsNpcKey, PersistentDataType.BYTE))) {
+            NPCType type = getNpcType(npcUuid);
+            if (type == NPCType.DUTY) {
+                plugin.getDutyManager().toggleDuty(player);
+            } else if (type == NPCType.GUI) {
+                GuiSection section = getGuiSection(npcUuid);
+                if (section != null) {
+                    openGuiSection(player, section);
+                }
+            }
             event.setCancelled(true);
         }
     }
 
     /**
-     * Check if a player is near a duty NPC
+     * Check if a player is near a Corrections NPC
      * @param player The player to check
-     * @return True if player is near a duty NPC, false otherwise
+     * @return True if player is near a Corrections NPC, false otherwise
      */
-    public boolean isNearDutyNpc(Player player) {
+    public boolean isNearCorrectionsNpc(Player player) {
         // If NPC system is disabled, return false
-        if (!plugin.getConfig().getBoolean("duty.npc.enabled", false)) {
+        FileConfiguration config = configManager.getConfig("config.yml");
+        if (config == null || !config.getBoolean("npc.enabled", false)) {
             return false;
         }
 
@@ -341,7 +368,7 @@ public class NPCManager implements Listener {
         double radiusSquared = interactionRadius * interactionRadius;
 
         // Check each NPC
-        for (UUID npcUuid : dutyNpcs) {
+        for (UUID npcUuid : correctionsNpcs) {
             // Get NPC info
             String worldName = npcConfig.getString("npcs." + npcUuid.toString() + ".world");
             if (worldName == null) continue;
@@ -369,11 +396,11 @@ public class NPCManager implements Listener {
     }
 
     /**
-     * Get the list of duty NPCs
-     * @return The list of duty NPC UUIDs
+     * Get the list of Corrections NPCs
+     * @return The list of Corrections NPC UUIDs
      */
-    public List<UUID> getDutyNpcs() {
-        return new ArrayList<>(dutyNpcs);
+    public List<UUID> getCorrectionsNpcs() {
+        return new ArrayList<>(correctionsNpcs);
     }
 
     /**
@@ -385,5 +412,58 @@ public class NPCManager implements Listener {
         } catch (IOException e) {
             plugin.getLogger().log(Level.SEVERE, "Failed to save npcs.yml", e);
         }
+    }
+
+    /**
+     * Get the default skin for Citizens NPCs (from config)
+     */
+    public String getDefaultNpcSkin() {
+        return npcSkin;
+    }
+
+    public NPCType getNpcType(UUID npcUuid) {
+        String typeStr = npcConfig.getString("npcs." + npcUuid.toString() + ".type", "DUTY");
+        try { return NPCType.valueOf(typeStr); } catch (Exception e) { return NPCType.DUTY; }
+    }
+
+    public GuiSection getGuiSection(UUID npcUuid) {
+        String sectionStr = npcConfig.getString("npcs." + npcUuid.toString() + ".gui-section");
+        if (sectionStr == null) return null;
+        try { return GuiSection.valueOf(sectionStr); } catch (Exception e) { return null; }
+    }
+
+    private void openGuiSection(Player player, GuiSection section) {
+        switch (section) {
+            case MAIN -> plugin.getGuiManager().openMainMenu(player);
+            case DUTY -> plugin.getGuiManager().openDutyMenu(player);
+            case STATS -> plugin.getGuiManager().openStatsMenu(player);
+            case ACTIONS -> plugin.getGuiManager().openActionsMenu(player);
+            case EQUIPMENT -> plugin.getGuiManager().openEquipmentMenu(player);
+            case SHOP -> plugin.getGuiManager().openShopMenu(player);
+            case TOKENS -> plugin.getGuiManager().openStatsMenu(player); // fallback, or implement if needed
+        }
+    }
+
+    private void loadConfiguration() {
+        // Load NPC configuration from centralized config
+        FileConfiguration config = configManager.getConfig("config.yml");
+        this.npcEnabled = config != null ? config.getBoolean("npc.enabled", false) : false;
+    }
+
+    /**
+     * Reload configuration
+     */
+    public void reload() {
+        this.interfaceConfig = configManager.getInterfaceConfig();
+        loadConfiguration();
+        
+        if (npcEnabled && isNPCPluginEnabled()) {
+            loadNpcs();
+        }
+    }
+
+    private boolean isNPCPluginEnabled() {
+        // Implementation of isNPCPluginEnabled method
+        return false; // Placeholder return, actual implementation needed
     }
 }

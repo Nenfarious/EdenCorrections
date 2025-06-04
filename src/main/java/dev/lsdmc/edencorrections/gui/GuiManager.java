@@ -1,15 +1,19 @@
 package dev.lsdmc.edencorrections.gui;
 
 import dev.lsdmc.edencorrections.EdenCorrections;
+import dev.lsdmc.edencorrections.config.ConfigManager;
 import dev.lsdmc.edencorrections.utils.MessageUtils;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.Sound;
+import org.bukkit.enchantments.Enchantment;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemFlag;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.potion.PotionEffect;
+import org.bukkit.potion.PotionEffectType;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -17,12 +21,19 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 
 /**
  * Redesigned GUI Manager for EdenCorrections
  */
 public class GuiManager {
     private final EdenCorrections plugin;
+    private final ConfigManager configManager;
+    private ConfigManager.InterfaceConfig interfaceConfig;
+    private ConfigManager.GuiConfig guiConfig;
+    private ConfigManager.MessagesConfig messagesConfig;
 
     // GUI titles
     private static final String MAIN_MENU_TITLE = "§e§lCorrections Command Center";
@@ -40,25 +51,59 @@ public class GuiManager {
 
     public GuiManager(EdenCorrections plugin) {
         this.plugin = plugin;
+        this.configManager = plugin.getConfigManager();
+        this.interfaceConfig = configManager.getInterfaceConfig();
+        this.guiConfig = configManager.getGuiConfig();
+        this.messagesConfig = configManager.getMessagesConfig();
+    }
+
+    /**
+     * Reload configuration
+     */
+    public void reload() {
+        this.interfaceConfig = configManager.getInterfaceConfig();
+        this.guiConfig = configManager.getGuiConfig();
+        this.messagesConfig = configManager.getMessagesConfig();
     }
 
     /**
      * Opens the main menu for a player
      */
     public void openMainMenu(Player player) {
+        GuiHolder holder = new GuiHolder(plugin, GuiHolder.GuiType.ENHANCED_MAIN);
+        
+        // Use configured title and size from interface config
+        String title = "§6§lGuard Control Panel"; // Default fallback
+        int size = 54; // Default fallback
+        
+        // Try to get configured values
+        if (interfaceConfig != null) {
+            // Note: Interface config structure needs to be implemented in ConfigManager
+            title = "§6§lGuard Control Panel"; // For now, keep default
+            size = 54; // For now, keep default
+        }
+        
+        Inventory gui = Bukkit.createInventory(holder, size, title);
+        
+        // Play configured open sound
+        if (guiConfig != null && guiConfig.openSound != null) {
+            try {
+                Sound sound = Sound.valueOf(guiConfig.openSound.toUpperCase().replace("MINECRAFT:", ""));
+                player.playSound(player.getLocation(), sound, 1.0f, 1.0f);
+            } catch (IllegalArgumentException e) {
+                // Fallback to default sound
+                player.playSound(player.getLocation(), Sound.BLOCK_CHEST_OPEN, 1.0f, 1.0f);
+            }
+        } else {
+            player.playSound(player.getLocation(), Sound.BLOCK_CHEST_OPEN, 1.0f, 1.0f);
+        }
+
         // Check permissions
         if (!player.hasPermission("edencorrections.duty") && !hasAnyRankPermission(player)) {
             player.sendMessage(MessageUtils.getPrefix(plugin).append(
                     MessageUtils.parseMessage("§cYou don't have permission to use the guard system.")));
             return;
         }
-
-        // Create inventory
-        GuiHolder holder = new GuiHolder(plugin, GuiHolder.GuiType.ENHANCED_MAIN);
-        Inventory gui = Bukkit.createInventory(holder, MAIN_MENU_SIZE, MAIN_MENU_TITLE);
-
-        // Fill with background
-        fillBackground(gui, Material.GRAY_STAINED_GLASS_PANE);
 
         // Get player data
         UUID uuid = player.getUniqueId();
@@ -152,7 +197,25 @@ public class GuiManager {
         equipLore.add("§7Click to open");
         gui.setItem(16, createItem(Material.IRON_CHESTPLATE, "§e§lEquipment", equipLore.toArray(new String[0])));
 
-        // 5. Shop at the bottom center (slot 22)
+        // 5. Token Management (slot 20)
+        int availableTokens = getPlayerTokens(player);
+        List<String> tokenLore = new ArrayList<>();
+        tokenLore.add("§7Manage your guard tokens");
+        tokenLore.add("§7Convert off-duty time to tokens");
+        tokenLore.add("");
+        tokenLore.add("§7Current tokens: §e" + availableTokens);
+        tokenLore.add("§7Off-duty time: §e" + formatTime(plugin.getDutyManager().getRemainingOffDutyMinutes(uuid) * 60));
+        tokenLore.add("");
+        if (player.hasPermission("edencorrections.converttime")) {
+            tokenLore.add("§a✓ §7Token conversion available");
+        } else {
+            tokenLore.add("§c✗ §7No token conversion permission");
+        }
+        tokenLore.add("");
+        tokenLore.add("§7Click to open");
+        gui.setItem(20, createItem(Material.SUNFLOWER, "§e§lToken Management", tokenLore.toArray(new String[0])));
+
+        // 6. Shop at the bottom center (slot 22)
         List<String> shopLore = new ArrayList<>();
         shopLore.add("§7Purchase items with tokens");
         shopLore.add("§7Unlock special equipment");
@@ -162,12 +225,11 @@ public class GuiManager {
         shopLore.add("§7Click to open");
         gui.setItem(22, createItem(Material.GOLD_INGOT, "§e§lGuard Shop", shopLore.toArray(new String[0])));
 
-        // 6. Close button (slot 31)
+        // 7. Close button (slot 31)
         gui.setItem(31, createItem(Material.BARRIER, "§c§lClose Menu",
                 "§7Click to close this menu"));
 
         // Play sound and open
-        playSound(player, Sound.BLOCK_CHEST_OPEN);
         player.openInventory(gui);
     }
 
@@ -627,119 +689,162 @@ public class GuiManager {
      * Opens the shop menu
      */
     public void openShopMenu(Player player) {
-        // Create inventory
+        // Create inventory using shop config
+        ConfigManager.ShopConfig shopConfig = plugin.getConfigManager().getShopConfig();
         GuiHolder holder = new GuiHolder(plugin, GuiHolder.GuiType.SHOP_VIEW);
-        Inventory gui = Bukkit.createInventory(holder, SUB_MENU_SIZE, SHOP_MENU_TITLE);
+        Inventory gui = Bukkit.createInventory(holder, shopConfig.gui.size, shopConfig.gui.title);
 
         // Fill with background
         fillBackground(gui, Material.YELLOW_STAINED_GLASS_PANE);
 
-        // Header
-        gui.setItem(4, createItem(Material.GOLD_BLOCK, "§6§lGuard Shop",
-                "§7Purchase items with tokens"));
-
-        // Get player's available tokens
-        int availableTokens = getPlayerTokens(player);
-
         // Token display
-        gui.setItem(13, createItem(Material.SUNFLOWER, "§e§lAvailable Tokens",
-                "§7You have §e" + availableTokens + " tokens",
-                "",
-                "§7Use these to purchase items below"));
+        int availableTokens = getPlayerTokens(player);
+        gui.setItem(shopConfig.navigation.tokenDisplay.slot, createItem(
+            shopConfig.navigation.tokenDisplay.material, 
+            shopConfig.navigation.tokenDisplay.name,
+            "§7You have §e" + availableTokens + " tokens",
+            "",
+            "§7Use these to purchase items below"
+        ));
 
-        // Shop items from config
-        addDynamicShopItems(gui, player, availableTokens);
+        // Add category buttons
+        gui.setItem(shopConfig.categories.equipment.slot, createItem(
+            shopConfig.categories.equipment.material,
+            shopConfig.categories.equipment.name,
+            "§7Browse equipment items",
+            "§7• Weapons and armor",
+            "§7• Combat gear",
+            "",
+            "§eClick to browse equipment!"
+        ));
 
-        // Back button
-        gui.setItem(27, createItem(Material.ARROW, "§e§lBack to Main Menu",
-                "§7Return to the main menu"));
+        gui.setItem(shopConfig.categories.consumables.slot, createItem(
+            shopConfig.categories.consumables.material,
+            shopConfig.categories.consumables.name,
+            "§7Browse consumable items",
+            "§7• Potions and food",
+            "§7• Temporary effects",
+            "",
+            "§eClick to browse consumables!"
+        ));
 
-        // Close button
-        gui.setItem(35, createItem(Material.BARRIER, "§c§lClose Menu",
-                "§7Click to close this menu"));
+        gui.setItem(shopConfig.categories.upgrades.slot, createItem(
+            shopConfig.categories.upgrades.material,
+            shopConfig.categories.upgrades.name,
+            "§7Browse upgrade items",
+            "§7• Permanent improvements",
+            "§7• Special abilities",
+            "",
+            "§eClick to browse upgrades!"
+        ));
+
+        // Add actual shop items
+        addShopItemsToGui(gui, shopConfig, availableTokens);
+
+        // Navigation buttons
+        gui.setItem(shopConfig.navigation.backToMenu.slot, createItem(
+            shopConfig.navigation.backToMenu.material,
+            shopConfig.navigation.backToMenu.name,
+            "§7Return to the main menu"
+        ));
 
         // Play sound and open
         playSound(player, Sound.UI_BUTTON_CLICK);
         player.openInventory(gui);
     }
 
-    private void addDynamicShopItems(Inventory gui, Player player, int availableTokens) {
-        org.bukkit.configuration.file.FileConfiguration config = plugin.getConfig();
-        if (!config.contains("shop")) return;
-        org.bukkit.configuration.ConfigurationSection shopSection = config.getConfigurationSection("shop");
-        if (shopSection == null) return;
-
-        int slot = 19; // Start slot for shop items
-        for (String key : shopSection.getKeys(false)) {
-            Object value = shopSection.get(key);
-            if (value instanceof org.bukkit.configuration.ConfigurationSection) {
-                org.bukkit.configuration.ConfigurationSection itemSection = shopSection.getConfigurationSection(key);
-                // If this section has a cost, it's a direct item
-                if (itemSection.contains("cost")) {
-                    addShopItemFromSection(gui, slot++, key, itemSection, availableTokens);
-                } else {
-                    // Nested items (e.g., potions, upgrades)
-                    for (String subKey : itemSection.getKeys(false)) {
-                        org.bukkit.configuration.ConfigurationSection subSection = itemSection.getConfigurationSection(subKey);
-                        if (subSection != null && subSection.contains("cost")) {
-                            addShopItemFromSection(gui, slot++, key + "." + subKey, subSection, availableTokens);
-                        }
-                    }
-                }
-            }
+    private void addShopItemsToGui(Inventory gui, ConfigManager.ShopConfig shopConfig, int availableTokens) {
+        int slot = 28; // Start slot for actual shop items
+        
+        // Add equipment items
+        for (Map.Entry<String, ConfigManager.ShopItem> entry : shopConfig.equipmentItems.entrySet()) {
+            if (slot >= gui.getSize() - 9) break; // Leave space for navigation
+            addShopItemToGui(gui, slot++, entry.getKey(), entry.getValue(), availableTokens);
+        }
+        
+        // Add consumable items
+        for (Map.Entry<String, ConfigManager.ShopItem> entry : shopConfig.consumableItems.entrySet()) {
+            if (slot >= gui.getSize() - 9) break; // Leave space for navigation
+            addShopItemToGui(gui, slot++, entry.getKey(), entry.getValue(), availableTokens);
+        }
+        
+        // Add upgrade items
+        for (Map.Entry<String, ConfigManager.ShopItem> entry : shopConfig.upgradeItems.entrySet()) {
+            if (slot >= gui.getSize() - 9) break; // Leave space for navigation
+            addShopItemToGui(gui, slot++, entry.getKey(), entry.getValue(), availableTokens);
         }
     }
 
-    private void addShopItemFromSection(Inventory gui, int slot, String id, org.bukkit.configuration.ConfigurationSection section, int availableTokens) {
-        int cost = section.getInt("cost", 0);
-        String name = section.getString("name", null);
-        if (name == null) {
-            // Fallback: prettify id
-            name = "§e§l" + id.replace("_", " ").replace(".", " ");
+    private void addShopItemToGui(Inventory gui, int slot, String itemKey, ConfigManager.ShopItem shopItem, int availableTokens) {
+        List<String> lore = new ArrayList<>();
+        
+        // Add description
+        if (!shopItem.description.isEmpty()) {
+            lore.add("§7" + shopItem.description);
+            lore.add("");
         }
-        String[] lore = buildShopItemLore(section, cost, availableTokens);
-        Material material = getShopMaterialForId(id);
-        gui.setItem(slot, createItem(material, name, lore));
-    }
-
-    private String[] buildShopItemLore(org.bukkit.configuration.ConfigurationSection section, int cost, int availableTokens) {
-        java.util.List<String> lore = new java.util.ArrayList<>();
-        // Add description lines if present
-        for (String key : section.getKeys(false)) {
-            if (key.equals("cost")) continue;
-            Object value = section.get(key);
-            if (value instanceof String && !((String) value).isEmpty()) {
-                lore.add("§7" + key.replace("-", " ") + ": §e" + value);
+        
+        // Add effects if present
+        if (!shopItem.effects.isEmpty()) {
+            lore.add("§6Effects:");
+            for (String effect : shopItem.effects) {
+                lore.add("§8  • §7" + effect);
             }
+            lore.add("");
         }
+        
+        // Add enchantments if present
+        if (!shopItem.enchantments.isEmpty()) {
+            lore.add("§5Enchantments:");
+            for (String enchant : shopItem.enchantments) {
+                lore.add("§8  • §7" + enchant);
+            }
+            lore.add("");
+        }
+        
+        // Add special properties
+        if (shopItem.stunDuration > 0) {
+            lore.add("§7Stun Duration: §e" + shopItem.stunDuration + "s");
+        }
+        if (shopItem.range > 0) {
+            lore.add("§7Range: §e" + shopItem.range + " blocks");
+        }
+        if (shopItem.duration > 0) {
+            lore.add("§7Duration: §e" + shopItem.duration + "s");
+        }
+        if (shopItem.radius > 0) {
+            lore.add("§7Radius: §e" + shopItem.radius + " blocks");
+        }
+        if (shopItem.protectionDuration > 0) {
+            lore.add("§7Protection Duration: §e" + shopItem.protectionDuration + "s");
+        }
+        if (shopItem.droppedCharges > 0) {
+            lore.add("§7Dropped Charges: §e" + shopItem.droppedCharges);
+        }
+        
+        // Add cost and purchase info
         lore.add("");
-        lore.add("§7Cost: §e" + cost + " tokens");
+        lore.add("§7Cost: §e" + shopItem.cost + " tokens");
+        lore.add("§7Amount: §e" + shopItem.amount);
         lore.add("");
-        if (availableTokens >= cost) {
+        
+        if (availableTokens >= shopItem.cost) {
             lore.add("§aClick to purchase!");
         } else {
             lore.add("§cNot enough tokens!");
-            lore.add("§cNeed §e" + (cost - availableTokens) + "§c more tokens");
+            lore.add("§cNeed §e" + (shopItem.cost - availableTokens) + "§c more tokens");
         }
-        return lore.toArray(new String[0]);
+
+        // Create and set item
+        ItemStack displayItem = createItem(shopItem.material, "§e§l" + formatItemName(itemKey), lore.toArray(new String[0]));
+        gui.setItem(slot, displayItem);
     }
 
-    private Material getShopMaterialForId(String id) {
-        // Map known ids to materials, fallback to GOLD_NUGGET
-        String key = id.toLowerCase();
-        if (key.contains("armor")) return Material.DIAMOND_CHESTPLATE;
-        if (key.contains("weapon")) return Material.DIAMOND_SWORD;
-        if (key.contains("rations")) return Material.GOLDEN_APPLE;
-        if (key.contains("blessing")) return Material.TOTEM_OF_UNDYING;
-        if (key.contains("enchant")) return Material.ENCHANTED_BOOK;
-        if (key.contains("smoke")) return Material.FIRE_CHARGE;
-        if (key.contains("taser")) return Material.TRIPWIRE_HOOK;
-        if (key.contains("strength")) return Material.POTION;
-        if (key.contains("swiftness")) return Material.POTION;
-        if (key.contains("fire-resistance")) return Material.POTION;
-        if (key.contains("health")) return Material.REDSTONE;
-        if (key.contains("speed")) return Material.SUGAR;
-        return Material.GOLD_NUGGET;
+    private String formatItemName(String itemKey) {
+        // Convert item key to display name (e.g., "smoke_bomb" -> "Smoke Bomb")
+        return Arrays.stream(itemKey.split("_"))
+                .map(word -> word.substring(0, 1).toUpperCase() + word.substring(1).toLowerCase())
+                .collect(Collectors.joining(" "));
     }
 
     /**
@@ -758,6 +863,9 @@ public class GuiManager {
                 break;
             case 16:  // Equipment
                 openEquipmentMenu(player);
+                break;
+            case 20:  // Token Management
+                openTokensView(player);
                 break;
             case 22:  // Shop
                 openShopMenu(player);
@@ -895,106 +1003,208 @@ public class GuiManager {
      * Handles clicks in the shop menu
      */
     public void handleShopMenuClick(Player player, int slot) {
+        ConfigManager.ShopConfig shopConfig = plugin.getConfigManager().getShopConfig();
         int availableTokens = getPlayerTokens(player);
 
-        switch (slot) {
-            case 19: // Armor Upgrade
-                handlePurchase(player, 2000, "armor_upgrade");
-                break;
-            case 20: // Weapon Upgrade
-                handlePurchase(player, 1500, "weapon_upgrade");
-                break;
-            case 22: // Guard Rations
-                handlePurchase(player, 500, "guard_rations");
-                break;
-            case 24: // Guard's Blessing
-                handlePurchase(player, 5000, "guards_blessing");
-                break;
-            case 25: // Enchantment Package
-                handlePurchase(player, 3000, "enchantment_package");
-                break;
-            case 27: // Back to main menu
-                openMainMenu(player);
-                break;
-            case 35: // Close
-                player.closeInventory();
-                break;
-        }
-    }
-
-    private void handlePurchase(Player player, int cost, String itemId) {
-        if (!plugin.getGuardTokenManager().hasTokens(player.getUniqueId(), cost)) {
-            player.sendMessage("§c§lNot enough tokens! §7You need §e" + (cost - getPlayerTokens(player)) + "§7 more tokens.");
-            playSound(player, Sound.ENTITY_VILLAGER_NO);
-            return;
-        }
-        boolean success = processPurchase(player, cost, itemId);
-        if (success) {
-            openShopMenu(player);
-            playSound(player, Sound.ENTITY_PLAYER_LEVELUP);
-            player.sendMessage("§a§lPurchase successful! §7Thank you for your purchase.");
-        } else {
-            player.sendMessage("§c§lError! §7Could not process your purchase. Please try again.");
-            playSound(player, Sound.ENTITY_VILLAGER_NO);
-        }
-    }
-
-    private boolean processPurchase(Player player, int cost, String itemId) {
-        // Deduct tokens first
-        if (!plugin.getGuardTokenManager().takeTokens(player, cost, "Shop purchase: " + itemId)) {
-            return false;
-        }
-        // TODO: Grant the purchased item/upgrade here
-        return true;
-    }
-
-    /**
-     * Main handler for GUI clicks - determines which sub-handler to call
-     */
-    public void handleEnhancedGuiClick(Player player, int slot, Inventory inventory) {
-        // Check the GUI type
-        if (!(inventory.getHolder() instanceof GuiHolder)) {
-            return;
-        }
-
-        GuiHolder holder = (GuiHolder) inventory.getHolder();
-        GuiHolder.GuiType guiType = holder.getGuiType();
-
-        // Route to appropriate handler
-        switch (guiType) {
-            case ENHANCED_MAIN:
-                handleMainMenuClick(player, slot);
-                break;
-            case DUTY_SELECTION:
-                handleDutyMenuClick(player, slot);
-                break;
-            case STATS_VIEW:
-                handleStatsMenuClick(player, slot);
-                break;
-            case ACTIONS_VIEW:
-                handleActionsMenuClick(player, slot);
-                break;
-            case EQUIPMENT_VIEW:
-                handleEquipmentMenuClick(player, slot);
-                break;
-            case SHOP_VIEW:
-                handleShopMenuClick(player, slot);
-                break;
-        }
-    }
-
-    /**
-     * Legacy GUI handler - for backward compatibility
-     */
-    public void handleDutySelectionGuiClick(Player player, int slot) {
-        // Use enhanced GUI if enabled
-        if (plugin.getConfig().getBoolean("gui.use-enhanced-gui", true)) {
+        // Check navigation buttons first
+        if (slot == shopConfig.navigation.backToMenu.slot) {
             openMainMenu(player);
             return;
         }
 
-        // Otherwise, implement legacy behavior here
-        // (omitted for brevity - would contain legacy implementation)
+        // Check if it's a shop item slot
+        if (slot >= 28 && slot < shopConfig.gui.size - 9) {
+            // Find which shop item was clicked
+            ConfigManager.ShopItem clickedItem = findShopItemBySlot(slot, shopConfig);
+            String itemKey = findShopItemKeyBySlot(slot, shopConfig);
+            
+            if (clickedItem != null && itemKey != null) {
+                handleDynamicShopPurchase(player, itemKey, clickedItem);
+                return;
+            }
+        }
+
+        // Check category buttons (for future expansion)
+        if (slot == shopConfig.categories.equipment.slot ||
+            slot == shopConfig.categories.consumables.slot ||
+            slot == shopConfig.categories.upgrades.slot) {
+            // For now, just refresh the shop (categories are displayed inline)
+            openShopMenu(player);
+            return;
+        }
+
+        // Fallback - close inventory for unhandled clicks
+        player.closeInventory();
+    }
+
+    private ConfigManager.ShopItem findShopItemBySlot(int targetSlot, ConfigManager.ShopConfig shopConfig) {
+        int currentSlot = 28;
+        
+        // Check equipment items
+        for (ConfigManager.ShopItem item : shopConfig.equipmentItems.values()) {
+            if (currentSlot == targetSlot) return item;
+            currentSlot++;
+            if (currentSlot >= shopConfig.gui.size - 9) break;
+        }
+        
+        // Check consumable items
+        for (ConfigManager.ShopItem item : shopConfig.consumableItems.values()) {
+            if (currentSlot == targetSlot) return item;
+            currentSlot++;
+            if (currentSlot >= shopConfig.gui.size - 9) break;
+        }
+        
+        // Check upgrade items
+        for (ConfigManager.ShopItem item : shopConfig.upgradeItems.values()) {
+            if (currentSlot == targetSlot) return item;
+            currentSlot++;
+            if (currentSlot >= shopConfig.gui.size - 9) break;
+        }
+        
+        return null;
+    }
+
+    private String findShopItemKeyBySlot(int targetSlot, ConfigManager.ShopConfig shopConfig) {
+        int currentSlot = 28;
+        
+        // Check equipment items
+        for (String key : shopConfig.equipmentItems.keySet()) {
+            if (currentSlot == targetSlot) return key;
+            currentSlot++;
+            if (currentSlot >= shopConfig.gui.size - 9) break;
+        }
+        
+        // Check consumable items
+        for (String key : shopConfig.consumableItems.keySet()) {
+            if (currentSlot == targetSlot) return key;
+            currentSlot++;
+            if (currentSlot >= shopConfig.gui.size - 9) break;
+        }
+        
+        // Check upgrade items
+        for (String key : shopConfig.upgradeItems.keySet()) {
+            if (currentSlot == targetSlot) return key;
+            currentSlot++;
+            if (currentSlot >= shopConfig.gui.size - 9) break;
+        }
+        
+        return null;
+    }
+
+    private void handleDynamicShopPurchase(Player player, String itemKey, ConfigManager.ShopItem shopItem) {
+        // Check if player has enough tokens
+        if (!plugin.getGuardTokenManager().hasTokens(player.getUniqueId(), shopItem.cost)) {
+            int needed = shopItem.cost - getPlayerTokens(player);
+            player.sendMessage("§c§lNot enough tokens! §7You need §e" + needed + "§7 more tokens.");
+            playSound(player, Sound.ENTITY_VILLAGER_NO);
+            return;
+        }
+
+        // Deduct tokens
+        if (!plugin.getGuardTokenManager().takeTokens(player, shopItem.cost, "Shop purchase: " + itemKey)) {
+            player.sendMessage("§c§lError! §7Could not process your purchase. Please try again.");
+            playSound(player, Sound.ENTITY_VILLAGER_NO);
+            return;
+        }
+
+        // Create and give the item
+        boolean success = createAndGiveShopItem(player, itemKey, shopItem);
+        
+        if (success) {
+            player.sendMessage("§a§lPurchase successful! §7You received: §e" + formatItemName(itemKey));
+            playSound(player, Sound.ENTITY_PLAYER_LEVELUP);
+            
+            // Refresh the shop menu
+            openShopMenu(player);
+        } else {
+            // Refund the tokens
+            plugin.getGuardTokenManager().giveTokens(player, shopItem.cost, "Shop refund: " + itemKey);
+            player.sendMessage("§c§lError! §7Could not create item. Tokens refunded.");
+            playSound(player, Sound.ENTITY_VILLAGER_NO);
+        }
+    }
+
+    private boolean createAndGiveShopItem(Player player, String itemKey, ConfigManager.ShopItem shopItem) {
+        try {
+            ItemStack item = new ItemStack(shopItem.material, shopItem.amount);
+            
+            // Apply custom display name if needed
+            ItemMeta meta = item.getItemMeta();
+            if (meta != null) {
+                meta.setDisplayName("§e§l" + formatItemName(itemKey));
+                
+                // Add description as lore if present
+                if (!shopItem.description.isEmpty()) {
+                    List<String> lore = new ArrayList<>();
+                    lore.add("§7" + shopItem.description);
+                    if (!shopItem.effects.isEmpty()) {
+                        lore.add("");
+                        lore.add("§6Effects:");
+                        for (String effect : shopItem.effects) {
+                            lore.add("§8  • §7" + effect);
+                        }
+                    }
+                    meta.setLore(lore);
+                }
+                
+                item.setItemMeta(meta);
+            }
+            
+            // Apply enchantments if specified
+            if (!shopItem.enchantments.isEmpty()) {
+                for (String enchantmentStr : shopItem.enchantments) {
+                    String[] parts = enchantmentStr.split(":");
+                    if (parts.length >= 2) {
+                        try {
+                            Enchantment enchantment = Enchantment.getByName(parts[0].toUpperCase());
+                            int level = Integer.parseInt(parts[1]);
+                            if (enchantment != null) {
+                                item.addUnsafeEnchantment(enchantment, level);
+                            }
+                        } catch (Exception e) {
+                            plugin.getLogger().warning("Invalid enchantment in shop item " + itemKey + ": " + enchantmentStr);
+                        }
+                    }
+                }
+            }
+            
+            // Give the item to the player
+            player.getInventory().addItem(item);
+            
+            // Apply effects if this is a consumable with effects
+            if (!shopItem.effects.isEmpty()) {
+                applyShopItemEffects(player, shopItem);
+            }
+            
+            return true;
+        } catch (Exception e) {
+            plugin.getLogger().warning("Failed to create shop item " + itemKey + " for " + player.getName() + ": " + e.getMessage());
+            return false;
+        }
+    }
+
+    private void applyShopItemEffects(Player player, ConfigManager.ShopItem shopItem) {
+        for (String effectStr : shopItem.effects) {
+            String[] parts = effectStr.split(":");
+            if (parts.length >= 3) {
+                try {
+                    PotionEffectType effectType = PotionEffectType.getByName(parts[0].toUpperCase());
+                    int amplifier = Integer.parseInt(parts[1]);
+                    int duration = Integer.parseInt(parts[2]);
+                    
+                    if (effectType != null) {
+                        player.addPotionEffect(new PotionEffect(effectType, duration * 20, amplifier));
+                    }
+                } catch (Exception e) {
+                    plugin.getLogger().warning("Invalid effect format: " + effectStr);
+                }
+            }
+        }
+    }
+
+    private void addDynamicShopItems(Inventory gui, Player player, int availableTokens) {
+        // This method is no longer used - replaced with addShopItemsToGui
+        // Keeping for backward compatibility but functionality moved to proper shop loading
     }
 
     /**
@@ -1072,7 +1282,7 @@ public class GuiManager {
             case "private": return Material.CHAINMAIL_CHESTPLATE;
             case "officer": return Material.IRON_CHESTPLATE;
             case "sergeant": return Material.GOLDEN_CHESTPLATE;
-            case "captain": return Material.DIAMOND_CHESTPLATE;
+            case "warden": return Material.DIAMOND_CHESTPLATE;
             default: return Material.LEATHER_CHESTPLATE;
         }
     }
@@ -1136,5 +1346,111 @@ public class GuiManager {
 
     private int getPlayerTokens(Player player) {
         return plugin.getGuardTokenManager().getTokens(player.getUniqueId());
+    }
+
+    /**
+     * Opens the token management view for a player
+     */
+    public void openTokensView(Player player) {
+        GuiHolder holder = new GuiHolder(plugin, GuiHolder.GuiType.TOKENS_VIEW);
+        Inventory gui = Bukkit.createInventory(holder, 27, "§6§lToken Management");
+
+        // Fill with background
+        fillBackground(gui, Material.YELLOW_STAINED_GLASS_PANE);
+
+        // Current tokens display
+        int currentTokens = getPlayerTokens(player);
+        gui.setItem(4, createItem(Material.SUNFLOWER, "§6§lYour Tokens", 
+            "§7Current Balance: §e" + currentTokens + " tokens",
+            "",
+            "§aClick to refresh"));
+
+        // Off-duty minutes display
+        int offDutyMinutes = plugin.getDutyManager().getRemainingOffDutyMinutes(player.getUniqueId());
+        gui.setItem(10, createItem(Material.CLOCK, "§b§lOff-Duty Time", 
+            "§7Available: §b" + offDutyMinutes + " minutes",
+            "",
+            "§7Convert to tokens for rewards"));
+
+        // Convert minutes to tokens
+        if (offDutyMinutes >= 5) {
+            gui.setItem(12, createItem(Material.GOLD_NUGGET, "§a§lConvert Time → Tokens", 
+                "§7Convert off-duty minutes to tokens",
+                "§7Rate: 1 minute = 100 tokens",
+                "",
+                "§aClick to convert 5 minutes"));
+        } else {
+            gui.setItem(12, createItem(Material.BARRIER, "§c§lConvert Time → Tokens", 
+                "§7Convert off-duty minutes to tokens",
+                "§7Rate: 1 minute = 100 tokens",
+                "",
+                "§cNeed at least 5 minutes"));
+        }
+
+        // Daily reward
+        boolean canReceiveDaily = plugin.getGuardTokenManager().canReceiveDailyReward(player);
+        if (canReceiveDaily) {
+            gui.setItem(14, createItem(Material.EMERALD, "§a§lDaily Reward", 
+                "§7Claim your daily token bonus",
+                "§7Amount: §e50 tokens",
+                "",
+                "§aClick to claim!"));
+        } else {
+            long timeUntil = plugin.getGuardTokenManager().getTimeUntilNextReward(player);
+            String timeStr = formatTime(timeUntil / 1000);
+            gui.setItem(14, createItem(Material.COAL, "§c§lDaily Reward", 
+                "§7Claim your daily token bonus",
+                "§7Next reward in: §c" + timeStr,
+                "",
+                "§cCome back later"));
+        }
+
+        // Shop link
+        gui.setItem(16, createItem(Material.CHEST, "§6§lGuard Shop", 
+            "§7Spend your tokens on equipment",
+            "§7and upgrades",
+            "",
+            "§eClick to open shop"));
+
+        // Back button
+        gui.setItem(22, createItem(Material.ARROW, "§7« Back to Main Menu"));
+
+        player.openInventory(gui);
+        playSound(player, Sound.UI_BUTTON_CLICK);
+    }
+
+    /**
+     * Handle clicks in the token management view
+     */
+    public void handleTokensViewClick(Player player, int slot) {
+        switch (slot) {
+            case 4:  // Refresh tokens
+                openTokensView(player);
+                break;
+            case 12:  // Convert minutes to tokens
+                int offDutyMinutes = plugin.getDutyManager().getRemainingOffDutyMinutes(player.getUniqueId());
+                if (offDutyMinutes >= 5) {
+                    boolean success = plugin.getDutyManager().convertOffDutyMinutes(player, 5);
+                    if (success) {
+                        player.sendMessage(MessageUtils.getPrefix(plugin).append(
+                            MessageUtils.parseMessage("§aConverted 5 minutes to 500 tokens!")));
+                        openTokensView(player); // Refresh view
+                    }
+                } else {
+                    player.sendMessage(MessageUtils.getPrefix(plugin).append(
+                        MessageUtils.parseMessage("§cYou need at least 5 off-duty minutes to convert!")));
+                }
+                break;
+            case 14:  // Daily reward
+                plugin.getGuardTokenManager().checkAndGiveDailyReward(player);
+                openTokensView(player); // Refresh view
+                break;
+            case 16:  // Shop
+                openShopMenu(player);
+                break;
+            case 22:  // Back to main menu
+                openMainMenu(player);
+                break;
+        }
     }
 }

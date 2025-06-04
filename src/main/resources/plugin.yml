@@ -1,11 +1,11 @@
 name: EdenCorrections
-version: '${project.version}'
+version: 1.8.0
 main: dev.lsdmc.edencorrections.EdenCorrections
-api-version: '1.20'
+api-version: 1.18
 authors: [LSDMC]
 description: A comprehensive prison-themed plugin for guard duty, inmate management, and prison security
 depend: [WorldGuard, WorldEdit]
-softdepend: [PlaceholderAPI, LuckPerms, Citizens, TokenManager]
+softdepend: [PlaceholderAPI, LuckPerms, Citizens]
 
 commands:
   edencorrections:
@@ -43,11 +43,6 @@ commands:
     permission: edencorrections.guard
     usage: /contraband <player>
 
-  dutynpc:
-    description: Manage duty NPCs
-    usage: /dutynpc help
-    permission: edencorrections.admin.npc
-
 # EdenCorrections Help System
 # Use '/cor help' to view all commands in an organized, paginated format
 # Commands are categorized by purpose and permission level:
@@ -61,6 +56,7 @@ commands:
 # /cor help 2 - Show page 2
 # /cor help admin - Show admin category
 # /cor help duty 2 - Show page 2 of duty category
+# /cor npc - Manage duty NPCs
 
 permissions:
   edencorrections.use:
@@ -83,6 +79,16 @@ permissions:
     description: Ability to check duty status
     default: true
 
+  edencorrections.tokens:
+    description: View your own guard token balance
+    default: true
+
+  edencorrections.converttime:
+    description: Convert off-duty time to tokens
+    default: op
+    children:
+      edencorrections.tokens: true
+
   edencorrections.admin:
     description: Full administrative access
     default: op
@@ -91,32 +97,68 @@ permissions:
       edencorrections.duty: true
       edencorrections.duty.check: true
       edencorrections.duty.actions: true
+      edencorrections.tokens: true
+      edencorrections.converttime: true
       edencorrections.admin.settime: true
       edencorrections.admin.npc: true
-      edencorrections.converttime: true
       edencorrections.admin.reload: true
-      edencorrections.admin.checkguards: true
-      edencorrections.admin.fixguards: true
-      edencorrections.admin.checkdeathcooldown: true
-      edencorrections.admin.cleardeathcooldown: true
-      edencorrections.admin.checkpenalty: true
-      edencorrections.admin.clearpenalty: true
-      edencorrections.admin.checkperms: true
-      edencorrections.admin.checkrank: true
-      edencorrections.admin.wanted: true
-      edencorrections.admin.chase: true
-      edencorrections.admin.jail: true
+      edencorrections.admin.tokens: true
       edencorrections.admin.locations: true
       edencorrections.admin.teleport: true
       edencorrections.admin.teleport.others: true
+      edencorrections.admin.checkitem: true
+      edencorrections.admin.integrationstatus: true
+      edencorrections.admin.reloadintegration: true
+      edencorrections.admin.jail: true
       edencorrections.guard.items: true
       edencorrections.guard.chase: true
       edencorrections.guard.jail: true
       edencorrections.progression: true
       edencorrections.shop: true
-      edencorrections.admin.checkitem: true
-      edencorrections.admin.integrationstatus: true
-      edencorrections.admin.reloadintegration: true
+
+  edencorrections.admin.settime:
+    description: Ability to set player duty time
+    default: op
+
+  edencorrections.admin.reload:
+    description: Ability to reload the plugin
+    default: op
+
+  edencorrections.admin.tokens:
+    description: Administer guard tokens (give, take, set)
+    default: op
+
+  edencorrections.admin.locations:
+    description: Ability to manage plugin locations (set, remove, view)
+    default: op
+
+  edencorrections.admin.teleport:
+    description: Ability to teleport to plugin locations
+    default: op
+
+  edencorrections.admin.teleport.others:
+    description: Ability to teleport other players to plugin locations
+    default: op
+
+  edencorrections.admin.checkitem:
+    description: Ability to check items for ExecutableItems integration
+    default: op
+
+  edencorrections.admin.integrationstatus:
+    description: Ability to check external plugin integration status
+    default: op
+
+  edencorrections.admin.reloadintegration:
+    description: Ability to reload external plugin integrations
+    default: op
+
+  edencorrections.admin.npc:
+    description: Ability to manage duty NPCs
+    default: op
+
+  edencorrections.admin.jail:
+    description: Ability to jail players offline
+    default: op
 
   edencorrections.guard:
     description: Access to guard features
@@ -126,20 +168,13 @@ permissions:
       edencorrections.duty: true
       edencorrections.duty.check: true
       edencorrections.duty.actions: true
+      edencorrections.tokens: true
       edencorrections.converttime: true
       edencorrections.guard.items: true
       edencorrections.guard.chase: true
       edencorrections.guard.jail: true
       edencorrections.progression: true
       edencorrections.shop: true
-
-  edencorrections.tokens:
-    description: View your own guard token balance
-    default: true
-
-  edencorrections.admin.tokens:
-    description: Administer guard tokens (give, take, set)
-    default: op
 
   edencorrections.guard.chase:
     description: Ability to start and end chases
@@ -161,14 +196,31 @@ permissions:
     description: Access to guard shop
     default: op
 
-  edencorrections.admin.locations:
-    description: Ability to manage plugin locations (set, remove, view)
-    default: op
+  edencorrections.jail.bypass:
+    description: Bypass jail restrictions
+    default: false
 
-  edencorrections.admin.teleport:
-    description: Ability to teleport to plugin locations
-    default: op
+  # Guard Rank Permissions
+  edencorrections.rank.trainee:
+    description: Trainee guard rank
+    default: false
 
-  edencorrections.admin.teleport.others:
-    description: Ability to teleport other players to plugin locations
-    default: op
+  edencorrections.rank.private:
+    description: Private guard rank
+    default: false
+
+  edencorrections.rank.officer:
+    description: Officer guard rank
+    default: false
+
+  edencorrections.rank.sergeant:
+    description: Sergeant guard rank
+    default: false
+
+  edencorrections.rank.warden:
+    description: Warden guard rank
+    default: false
+
+# Note: Guard rank permissions and mappings are configured in config.yml
+# Use '/cor setguardrank <group> <rank>' to link LuckPerms groups to guard ranks
+# Use '/cor listguardranks' to view current rank mappings

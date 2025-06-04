@@ -16,82 +16,70 @@ import java.util.Set;
 import java.util.logging.Level;
 
 public class LuckPermsUtil {
-    // Guard ranks from lowest to highest
-    private static final List<String> GUARD_RANKS = Arrays.asList(
-            "trainee", "private", "officer", "sergeant", "captain"
-    );
-
     /**
-     * Get the guard rank of a player from LuckPerms
-     * @param player The player to check
-     * @return The guard rank, or null if player has no guard rank
+     * Get the guard rank of a player from LuckPerms and config mapping
      */
     public static String getGuardRank(Player player) {
         try {
-            LuckPerms api = LuckPermsProvider.get();
-            User user = api.getUserManager().getUser(player.getUniqueId());
-
-            if (user == null) {
-                return null;
+            var plugin = dev.lsdmc.edencorrections.EdenCorrections.getInstance();
+            var rankManager = plugin.getGuardRankManager();
+            if (plugin.getConfig().contains("guard-rank-groups")) {
+                var luckPerms = LuckPermsProvider.get();
+                var user = luckPerms.getUserManager().getUser(player.getUniqueId());
+                if (user != null) {
+                    for (String rank : rankManager.getRankList()) {
+                        String group = plugin.getConfig().getString("guard-rank-groups." + rank);
+                        if (group != null && user.getPrimaryGroup().equalsIgnoreCase(group)) {
+                            return rank;
+                        }
+                    }
+                }
             }
-
-            // Check each rank from highest to lowest priority
-            for (int i = GUARD_RANKS.size() - 1; i >= 0; i--) {
-                String rank = GUARD_RANKS.get(i);
-                // Get the current active inherited groups
-                @NonNull @Unmodifiable Collection<Group> inheritedGroups = user.getInheritedGroups(QueryOptions.defaultContextualOptions());
-
-                if (inheritedGroups.stream()
-                        .anyMatch(group -> group.getName().equalsIgnoreCase(rank))) {
+            // Fallback: check permissions for rank
+            for (int i = rankManager.getRankList().size() - 1; i >= 0; i--) {
+                String rank = rankManager.getRankList().get(i);
+                if (player.hasPermission("edencorrections.rank." + rank)) {
                     return rank;
                 }
             }
-
-            return null; // No guard rank found
+            return null;
         } catch (Exception e) {
-            return null; // LuckPerms not available or other error
+            return null;
         }
     }
 
     /**
      * Check if a player has a specific guard rank
-     * @param player The player to check
-     * @param rank The rank to check for
-     * @return True if player has the rank, false otherwise
      */
     public static boolean hasGuardRank(Player player, String rank) {
         try {
-            LuckPerms api = LuckPermsProvider.get();
-            User user = api.getUserManager().getUser(player.getUniqueId());
-
-            if (user == null) {
-                return false;
+            var plugin = dev.lsdmc.edencorrections.EdenCorrections.getInstance();
+            var rankManager = plugin.getGuardRankManager();
+            var luckPerms = LuckPermsProvider.get();
+            var user = luckPerms.getUserManager().getUser(player.getUniqueId());
+            String group = plugin.getConfig().getString("guard-rank-groups." + rank);
+            if (user != null && group != null) {
+                return user.getPrimaryGroup().equalsIgnoreCase(group);
             }
-
-            // Get the current active inherited groups
-            @NonNull @Unmodifiable Collection<Group> inheritedGroups = user.getInheritedGroups(QueryOptions.defaultContextualOptions());
-
-            return inheritedGroups.stream()
-                    .anyMatch(group -> group.getName().equalsIgnoreCase(rank));
+            // Fallback: check permission
+            return player.hasPermission("edencorrections.rank." + rank);
         } catch (Exception e) {
-            return false; // LuckPerms not available or other error
+            return false;
         }
     }
 
     /**
      * Check if a player has any guard rank
-     * @param player The player to check
-     * @return True if player has any guard rank, false otherwise
      */
     public static boolean hasAnyGuardRank(Player player) {
         return getGuardRank(player) != null;
     }
 
     /**
-     * Get all valid guard ranks
-     * @return List of guard ranks from lowest to highest
+     * Get all valid guard ranks from config
      */
     public static List<String> getGuardRanks() {
-        return GUARD_RANKS;
+        var plugin = dev.lsdmc.edencorrections.EdenCorrections.getInstance();
+        return plugin.getGuardRankManager().getRankList();
     }
 }

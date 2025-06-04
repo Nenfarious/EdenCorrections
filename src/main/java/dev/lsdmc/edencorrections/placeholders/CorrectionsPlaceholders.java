@@ -125,6 +125,23 @@ public class CorrectionsPlaceholders extends PlaceholderExpansion {
                 // Return whether the player is locked (has an active penalty)
                 return plugin.getGuardPenaltyManager().isPlayerLocked(uuid) ? "Yes" : "No";
 
+            // Guard token system placeholders
+            case "guard_tokens":
+                // Return the player's current guard token balance
+                return String.valueOf(plugin.getGuardTokenManager().getTokens(uuid));
+
+            case "guard_tokens_formatted":
+                // Return the player's guard token balance with formatting
+                int tokens = plugin.getGuardTokenManager().getTokens(uuid);
+                return String.format("%,d", tokens);
+
+            case "is_guard":
+                // Return whether the player is a guard
+                if (player.isOnline()) {
+                    return plugin.getGuardRankManager().getPlayerRank(player.getPlayer()) != null ? "Yes" : "No";
+                }
+                return "No";
+
             default:
                 return null;
         }

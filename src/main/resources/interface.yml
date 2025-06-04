@@ -1,0 +1,212 @@
+# =================================
+# Eden Corrections - Interface & Messages Configuration
+# All settings for GUI interfaces and plugin messages
+# =================================
+
+# =================================
+# GUI System Settings
+# =================================
+gui:
+  # Whether to show GUI on player join
+  show-on-join: false
+  # Delay before showing join GUI (ticks)
+  join-delay: 20
+  # Sound played when opening GUIs
+  open-sound: minecraft:block.chest.open
+  # Whether to use the enhanced GUI system
+  use-enhanced-gui: true
+  
+  # Main menu GUI settings
+  main-menu:
+    title: "§6§lGuard Control Panel"
+    size: 54
+    update-interval: 20 # ticks
+    
+  # Duty selection GUI
+  duty-selection:
+    title: "§c§lDuty Management"
+    size: 27
+    
+  # Statistics GUI
+  stats-view:
+    title: "§b§lGuard Statistics"
+    size: 45
+    
+  # Token management GUI
+  tokens-view:
+    title: "§6§lToken Management"
+    size: 36
+
+# =================================
+# Core Plugin Messages
+# =================================
+messages:
+  # Plugin prefix for all messages
+  prefix: "<gold>[Corrections]</gold> "
+  
+  # Permission and access messages
+  no-permission: "<dark_gray>[</dark_gray><dark_red><bold>𝕏</bold></dark_red><dark_gray>]</dark_gray> <red>You don't have permission to do that!</red>"
+  not-in-region: "<dark_gray>[</dark_gray><dark_red><bold>𝕏</bold></dark_red><dark_gray>]</dark_gray> <red>You must be in the duty room to go on/off duty!</red>"
+  not-in-area: "<dark_gray>[</dark_gray><dark_red><bold>𝕏</bold></dark_red><dark_gray>]</dark_gray> <red>You must be in a designated duty area to go on/off duty!</red>"
+  
+  # Duty status messages
+  already-on-duty: "<dark_gray>[</dark_gray><dark_red><bold>𝕏</bold></dark_red><dark_gray>]</dark_gray> <red>You are already on duty!</red>"
+  already-off-duty: "<dark_gray>[</dark_gray><dark_red><bold>𝕏</bold></dark_red><dark_gray>]</dark_gray> <red>You are already off duty!</red>"
+  on-duty: "<dark_gray>[</dark_gray><dark_red><bold>𝕏</bold></dark_red><dark_gray>]</dark_gray> <green>You are now on guard duty!</green>"
+  off-duty: "<dark_gray>[</dark_gray><dark_red><bold>𝕏</bold></dark_red><dark_gray>]</dark_gray> <yellow>You are now off duty.</yellow>"
+  
+  # Off-duty time messages
+  off-duty-reward: "<dark_gray>[</dark_gray><dark_red><bold>𝕏</bold></dark_red><dark_gray>]</dark_gray> <green>You've earned {minutes} minutes of off-duty time!</green>"
+  time-remaining: "<dark_gray>[</dark_gray><dark_red><bold>𝕏</bold></dark_red><dark_gray>]</dark_gray> <yellow>You have {minutes} minutes of off-duty time remaining.</yellow>"
+  time-added: "<dark_gray>[</dark_gray><dark_red><bold>𝕏</bold></dark_red><dark_gray>]</dark_gray> <green>Added {minutes} minutes to {player}'s off-duty time.</green>"
+  time-set: "<dark_gray>[</dark_gray><dark_red><bold>𝕏</bold></dark_red><dark_gray>]</dark_gray> <green>Set {player}'s off-duty time to {minutes} minutes.</green>"
+  time-added-capped: "<dark_gray>[</dark_gray><dark_red><bold>𝕏</bold></dark_red><dark_gray>]</dark_gray> <green>Added time to your off-duty bank. You've reached the maximum of {max} minutes.</green>"
+  threshold-reached: "<dark_gray>[</dark_gray><dark_red><bold>𝕏</bold></dark_red><dark_gray>]</dark_gray> <green>You've served enough time to earn a reward! Going off duty now will earn you {minutes} minutes of off-duty time.</green>"
+  
+  # Token conversion messages
+  converted-time: "<dark_gray>[</dark_gray><dark_red><bold>𝕏</bold></dark_red><dark_gray>]</dark_gray> <green>Converted {minutes} minutes to {tokens} tokens!</green>"
+  
+  # Broadcast messages (leave empty to disable)
+  broadcast-on-duty: ""
+  broadcast-off-duty: ""
+  
+  # GUI-specific messages
+  continuing-duty: "<green>You're continuing your guard shift!</green>"
+  remaining-off-duty: "<yellow>You're remaining off duty.</yellow>"
+
+# =================================
+# Immobilization System Messages
+# =================================
+immobilization:
+  # Messages for the immobilization system
+  start: "<dark_gray>[</dark_gray><dark_red><bold>𝕏</bold></dark_red><dark_gray>]</dark_gray> <yellow>You are immobilized for {seconds} seconds while preparing for duty!</yellow>"
+  broadcast: "<dark_gray>[</dark_gray><dark_red><bold>𝕏</bold></dark_red><dark_gray>]</dark_gray> <red>WARNING: {rank} {player} is going on duty in {seconds} seconds!</red>"
+  reminder: "<dark_gray>[</dark_gray><dark_red><bold>𝕏</bold></dark_red><dark_gray>]</dark_gray> <red>You cannot move while preparing for duty! ({seconds}s remaining)</red>"
+  complete: "<dark_gray>[</dark_gray><dark_red><bold>𝕏</bold></dark_red><dark_gray>]</dark_gray> <green>You are now on duty and ready to patrol!</green>"
+  complete-broadcast: "<dark_gray>[</dark_gray><dark_red><bold>𝕏</bold></dark_red><dark_gray>]</dark_gray> <red>ALERT: {player} is now on duty and patrolling!</red>"
+
+# =================================
+# Action Result Messages
+# =================================
+actions:
+  # Search and investigation messages
+  search:
+    started: "<yellow>Searching {target} in {seconds} seconds...</yellow>"
+    cancelled: "<red>Search cancelled! Target moved away.</red>"
+    successful: "<green>Search completed successfully!</green>"
+    no-contraband: "<green>Search complete - no contraband found.</green>"
+    contraband-found: "<red>Contraband discovered during search!</red>"
+  
+  # Metal detection messages
+  metal-detector:
+    scanning: "<yellow>Scanning {target} for metal items...</yellow>"
+    no-metal: "<green>Metal scan complete - no metal detected.</green>"
+    metal-found: "<red>Metal detection positive! Found: {items}</red>"
+  
+  # Drug testing messages
+  drug-test:
+    testing: "<yellow>Analyzing {target} for drug presence...</yellow>"
+    negative: "<green>Drug test negative - subject is clean.</green>"
+    positive: "<red>Drug test positive! Substances detected.</red>"
+  
+  # Apprehension messages
+  handcuffs:
+    cuffing: "<yellow>Attempting to handcuff {target}...</yellow>"
+    escaped: "<red>Target escaped during handcuffing!</red>"
+    successful: "<green>Successfully handcuffed {target}!</green>"
+  
+  # Spyglass messages
+  spyglass:
+    marked: "<green>Target {target} has been marked for tracking!</green>"
+    insufficient-wanted: "<red>Target must have at least {level} wanted stars to mark!</red>"
+
+# =================================
+# Error and Warning Messages
+# =================================
+errors:
+  # General error messages
+  command-error: "<red>An error occurred while executing that command.</red>"
+  invalid-player: "<red>Player not found or not online.</red>"
+  invalid-number: "<red>Invalid number provided.</red>"
+  database-error: "<red>Database error - please contact an administrator.</red>"
+  
+  # Item usage errors
+  item-on-cooldown: "<red>{item} is on cooldown for {seconds} more seconds!</red>"
+  target-too-far: "<red>Target is too far away!</red>"
+  invalid-target: "<red>Invalid target for this action!</red>"
+  not-on-duty: "<red>You must be on duty to use this!</red>"
+  
+  # Permission errors
+  rank-required: "<red>You need rank {rank} or higher to use this!</red>"
+  area-restricted: "<red>You cannot use this in your current area!</red>"
+
+# =================================
+# Success and Confirmation Messages
+# =================================
+success:
+  # General success messages
+  action-completed: "<green>Action completed successfully!</green>"
+  data-saved: "<green>Data has been saved.</green>"
+  settings-updated: "<green>Settings have been updated.</green>"
+  
+  # Reward messages
+  tokens-earned: "<green>+{amount} tokens earned! ({reason})</green>"
+  points-earned: "<green>+{amount} progression points! ({reason})</green>"
+  rank-promotion: "<gold>Congratulations! You've been promoted to {rank}!</gold>"
+
+# =================================
+# Informational Messages
+# =================================
+info:
+  # Status information
+  duty-status: "<yellow>Duty Status: {status}</yellow>"
+  rank-info: "<yellow>Current Rank: {rank} ({points} points)</yellow>"
+  tokens-balance: "<yellow>Token Balance: {tokens}</yellow>"
+  time-served: "<yellow>Time Served: {minutes} minutes</yellow>"
+  
+  # System information
+  plugin-reloaded: "<green>EdenCorrections has been reloaded successfully!</green>"
+  maintenance-mode: "<yellow>The plugin is currently in maintenance mode.</yellow>"
+  feature-disabled: "<yellow>This feature is currently disabled.</yellow>"
+
+# =================================
+# Chat Integration Settings
+# =================================
+chat:
+  # Whether to integrate with chat plugins
+  integration-enabled: false
+  # Chat format for guard ranks
+  guard-prefix-format: "&8[&c{rank}&8] "
+  # Whether to show guard status in chat
+  show-duty-status: true
+  # Format for duty status in chat
+  duty-status-format: "&7[&aON DUTY&7]"
+  off-duty-status-format: "&7[&7OFF DUTY&7]"
+
+# =================================
+# Notification Settings
+# =================================
+notifications:
+  # Sound settings for notifications
+  sounds:
+    rank-up: "minecraft:entity.player.levelup"
+    tokens-earned: "minecraft:entity.experience_orb.pickup"
+    duty-start: "minecraft:block.note_block.chime"
+    duty-end: "minecraft:block.note_block.bass"
+    error: "minecraft:entity.villager.no"
+  
+  # Title and subtitle notifications
+  titles:
+    enabled: true
+    rank-promotion:
+      title: "&6&lRANK UP!"
+      subtitle: "&7You are now a {rank}"
+      fade-in: 10
+      stay: 60
+      fade-out: 10
+  
+  # Action bar notifications
+  action-bar:
+    enabled: true
+    duty-reminder: "&aOn Duty &7| &eTokens: {tokens} &7| &bTime: {time}"
+    cooldown-reminder: "&c{item} on cooldown: {seconds}s" 

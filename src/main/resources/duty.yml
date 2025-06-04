@@ -1,0 +1,125 @@
+# =================================
+# Eden Corrections - Duty System Configuration
+# All settings related to guard duty mechanics
+# =================================
+
+# =================================
+# Basic Duty Settings
+# =================================
+duty:
+  # Whether to clear player inventory when going on duty
+  clear-inventory: true
+  # Whether to broadcast duty changes to the server
+  broadcast: true
+  # Minimum minutes on duty to earn off-duty time reward
+  threshold-minutes: 15
+  # Minutes of off-duty time earned per threshold completion
+  reward-minutes: 30
+  # Maximum off-duty time that can be accumulated (in minutes)
+  max-off-duty-time: 4320  # 72 hours
+  # Duration of immobilization when going on duty (seconds)
+  immobilization-duration: 30
+
+# =================================
+# Region-Based Duty Control
+# =================================
+region:
+  # Whether to require players to be in specific regions to toggle duty
+  enabled: true
+  # Primary duty region name (WorldGuard region)
+  name: "locker_room"
+  
+  # Valid regions for duty actions (if using multiple regions)
+  valid-regions:
+    - "guard_station"
+    - "locker_room"
+    - "duty_office"
+
+# =================================
+# Inventory Management
+# =================================
+inventory-cache:
+  # Whether to save/restore player inventories when toggling duty
+  enabled: true
+  # Whether to include armor in the cache
+  include-armor: true
+  # Whether to include offhand item in the cache
+  include-offhand: true
+  # Whether to save inventory when going on duty
+  save-on-duty: true
+  # Whether to restore inventory when going off duty
+  restore-on-offduty: true
+
+# =================================
+# Guard Rank Kit System
+# =================================
+rank-kits:
+  # Kit names that correspond to CMI kits or your kit plugin
+  # Format: rank: "kit_name"
+  trainee: "trainee"
+  private: "private"
+  officer: "officer"
+  sergeant: "sergeant"
+  warden: "warden"
+
+# =================================
+# Guard Lounge Location
+# =================================
+guard-lounge:
+  # Teleport location for guards (used for penalties, etc.)
+  world: "world"
+  x: 0
+  y: 64
+  z: 0
+  yaw: 0
+  pitch: 0
+
+# =================================
+# Off-Duty Time System
+# =================================
+off-duty:
+  # How often guards earn time while on duty (every X minutes = 1 minute off-duty)
+  earning-ratio: 2  # Every 2 minutes on duty = 1 minute off-duty time
+  # Whether to show periodic reminders about earned time
+  show-earning-messages: true
+  # Interval for earning messages (in minutes)
+  message-interval: 15
+
+# =================================
+# Duty Session Management
+# =================================
+session:
+  # Whether to auto-save duty sessions
+  auto-save: true
+  # Auto-save interval (in minutes)
+  save-interval: 5
+  # Whether to resume duty status on server restart (if player was on duty)
+  resume-on-restart: false
+  # Grace period for players to return after disconnect (minutes)
+  disconnect-grace-period: 10
+
+# =================================
+# Duty Restrictions
+# =================================
+restrictions:
+  # Whether to prevent certain actions while on duty
+  enabled: true
+  # Commands that are blocked while on duty
+  blocked-commands:
+    - "/sell"
+    - "/shop"
+    - "/market"
+    - "/trade"
+    - "/ah"
+    - "/auction"
+    - "/plot"
+    - "/p"
+    - "/arena"
+    - "/duel"
+  # Regions that guards cannot enter while on duty
+  blocked-regions:
+    - "mine"
+    - "farm"
+    - "arena"
+  # Whether to show warning messages for restrictions
+  show-restriction-warnings: true 

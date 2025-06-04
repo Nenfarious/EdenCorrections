@@ -129,26 +129,28 @@ public class GuardLootProcessor {
 
         try {
             // Get items from config
-            List<Map<?, ?>> itemsData = null;
             Object configSection = plugin.getConfig().get(configPath);
 
-            if (configSection instanceof List) {
-                @SuppressWarnings("unchecked")
-                List<Map<?, ?>> typedList = (List<Map<?, ?>>) configSection;
-                itemsData = typedList;
-            }
-
-            if (itemsData == null || itemsData.isEmpty()) {
+            if (!(configSection instanceof List<?> itemsListRaw) || itemsListRaw == null) {
                 plugin.getLogger().warning("No items found at config path: " + configPath);
                 return items;
             }
-
+            List<Map<?, ?>> itemsData = new ArrayList<>();
+            for (Object o : itemsListRaw) {
+                if (o instanceof Map<?, ?> map) {
+                    itemsData.add(map);
+                }
+            }
+            if (itemsData.isEmpty()) {
+                plugin.getLogger().warning("No valid item maps found at config path: " + configPath);
+                return items;
+            }
             for (Map<?, ?> itemData : itemsData) {
                 try {
-                    // Get item details
-                    String itemName = itemData.get("item").toString();
+                    if (!itemData.containsKey("item")) continue;
+                    String itemName = String.valueOf(itemData.get("item"));
                     String dropChanceStr = itemData.containsKey("drop-chance") ?
-                            itemData.get("drop-chance").toString() : "100%";
+                            String.valueOf(itemData.get("drop-chance")) : "100%";
 
                     // Log item processing
                     plugin.getLogger().info("Processing item " + itemName + " with drop chance " + dropChanceStr);
@@ -176,7 +178,7 @@ public class GuardLootProcessor {
 
                     // Handle item amount (if specified)
                     if (itemData.containsKey("amount")) {
-                        String amountStr = itemData.get("amount").toString();
+                        String amountStr = String.valueOf(itemData.get("amount"));
                         int amount = parseAmount(amountStr);
                         item.setAmount(amount);
                         plugin.getLogger().info("Set amount to " + amount + " for item " + itemName);
@@ -184,9 +186,14 @@ public class GuardLootProcessor {
 
                     // Handle enchantments
                     if (itemData.containsKey("enchantments")) {
-                        @SuppressWarnings("unchecked")
-                        List<String> enchantmentsList = (List<String>) itemData.get("enchantments");
-                        applyEnchantments(item, enchantmentsList);
+                        Object enchObj = itemData.get("enchantments");
+                        if (enchObj instanceof List<?> enchList) {
+                            List<String> enchantmentsList = new ArrayList<>();
+                            for (Object ench : enchList) {
+                                if (ench instanceof String s) enchantmentsList.add(s);
+                            }
+                            applyEnchantments(item, enchantmentsList);
+                        }
                     }
 
                     items.add(item);

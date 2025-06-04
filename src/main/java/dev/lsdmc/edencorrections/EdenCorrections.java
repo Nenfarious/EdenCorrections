@@ -48,6 +48,8 @@ import dev.lsdmc.edencorrections.managers.ContrabandManager;
 import dev.lsdmc.edencorrections.storage.YamlStorage;
 import dev.lsdmc.edencorrections.storage.SQLiteStorage;
 import dev.lsdmc.edencorrections.storage.MySQLStorage;
+import dev.lsdmc.edencorrections.managers.loot.ModernLootManager;
+import dev.lsdmc.edencorrections.managers.SafezoneManager;
 
 public class EdenCorrections extends JavaPlugin {
     private static EdenCorrections instance;
@@ -99,6 +101,15 @@ public class EdenCorrections extends JavaPlugin {
     // Add new field
     private ContrabandManager contrabandManager;
 
+    // Add new field
+    private ModernLootManager modernLootManager;
+
+    // Add new field
+    private SafezoneManager safezoneManager;
+
+    // Emergency killswitch
+    private static volatile boolean emergencyShutdown = false;
+
     @Override
     public void onEnable() {
         instance = this;
@@ -109,9 +120,6 @@ public class EdenCorrections extends JavaPlugin {
 
         // Initialize configuration manager FIRST
         configManager = new ConfigManager(this);
-        if (!configManager.validateConfiguration()) {
-            getLogger().warning("Configuration validation failed! Some features may not work correctly.");
-        }
 
         // Initialize LocationManager EARLY (before other managers that might need locations)
         locationManager = new LocationManager(this);
@@ -119,9 +127,6 @@ public class EdenCorrections extends JavaPlugin {
 
         // Initialize GuardRankManager
         guardRankManager = new GuardRankManager(this);
-
-        // Initialize GuardStatisticsManager BEFORE DutyManager and others that use it
-        guardStatisticsManager = new GuardStatisticsManager(this);
 
         // Initialize WorldGuard integration
         initWorldGuard();
@@ -131,6 +136,9 @@ public class EdenCorrections extends JavaPlugin {
 
         // Initialize storage with DataManager
         initStorage();
+
+        // Initialize GuardStatisticsManager AFTER storage is initialized
+        guardStatisticsManager = new GuardStatisticsManager(this);
 
         // Initialize region utils
         regionUtils = new RegionUtils();
@@ -173,6 +181,14 @@ public class EdenCorrections extends JavaPlugin {
         contrabandManager = new ContrabandManager(this);
         getLogger().info("ContrabandManager initialized");
 
+        // Initialize loot manager
+        modernLootManager = new ModernLootManager(this);
+        getLogger().info("ModernLootManager initialized");
+
+        // Initialize SafezoneManager
+        safezoneManager = new SafezoneManager(this);
+        getLogger().info("SafezoneManager initialized");
+
         // Register commands
         BaseCommandHandler baseCommandHandler = new BaseCommandHandler(this);
         Objects.requireNonNull(getCommand("edencorrections")).setExecutor(baseCommandHandler);
@@ -195,11 +211,6 @@ public class EdenCorrections extends JavaPlugin {
 
         Objects.requireNonNull(getCommand("contraband")).setExecutor((sender, command, label, args) -> guardCommandHandler.handleContrabandCommand(sender, args, "contraband"));
         Objects.requireNonNull(getCommand("contraband")).setTabCompleter((sender, command, label, args) -> guardCommandHandler.onTabCompleteContraband(sender, args));
-
-        // Register NPC commands
-        NPCCommandHandler npcCommandHandler = new NPCCommandHandler(this, npcManager);
-        Objects.requireNonNull(getCommand("dutynpc")).setExecutor(npcCommandHandler);
-        Objects.requireNonNull(getCommand("dutynpc")).setTabCompleter(npcCommandHandler);
 
         // Register event listeners
         getServer().getPluginManager().registerEvents(new GuiListener(this), this);
@@ -242,6 +253,21 @@ public class EdenCorrections extends JavaPlugin {
     private void initStorage() {
         // Select storage backend based on config
         String type = configManager.getStorageType();
+        
+        // Check if advanced features require SQLiteStorage
+        boolean needsSQLite = true; // Most advanced features require SQLite
+        
+        if (needsSQLite && !type.equals("sqlite")) {
+            getLogger().warning("========================= STORAGE WARNING =========================");
+            getLogger().warning("You have configured storage type: " + type);
+            getLogger().warning("However, advanced guard features require SQLiteStorage:");
+            getLogger().warning("- Guard Statistics, Progression, Wanted Levels, Jail System, Tokens, Contraband");
+            getLogger().warning("Automatically switching to SQLiteStorage for compatibility.");
+            getLogger().warning("Update your config.yml to 'storage.type: sqlite' to remove this warning.");
+            getLogger().warning("================================================================");
+            type = "sqlite";
+        }
+        
         switch (type) {
             case "mysql" -> {
                 storageManager = new MySQLStorage(this);
@@ -260,8 +286,8 @@ public class EdenCorrections extends JavaPlugin {
                 getLogger().info("Using DataManager for storage backend (legacy)");
             }
             default -> {
-                getLogger().warning("Unknown storage type '" + type + "', defaulting to YamlStorage");
-                storageManager = new YamlStorage(this);
+                getLogger().warning("Unknown storage type '" + type + "', defaulting to SQLiteStorage");
+                storageManager = new SQLiteStorage(this);
             }
         }
         storageManager.initialize();
@@ -269,42 +295,36 @@ public class EdenCorrections extends JavaPlugin {
 
     @Override
     public void onDisable() {
-        // Save all data
+        // Save all data BEFORE closing storage
         if (guardManager != null) {
             guardManager.shutdown();
         }
-
-        // Close storage connections
-        if (storageManager != null) {
-            storageManager.shutdown();
+        // Save jail data before closing storage
+        if (jailManager != null) {
+            jailManager.shutdown();
         }
-
-        // Shutdown NPC manager
-        if (npcManager != null) {
-            npcManager.shutdown();
-        }
-
         // Shutdown penalty manager
         if (guardPenaltyManager != null) {
             guardPenaltyManager.shutdown();
         }
-
         // Shutdown guard progression manager
         if (guardProgressionManager != null) {
             guardProgressionManager.shutdown();
         }
-
         // Shutdown enforcement managers
         if (chaseManager != null) {
             chaseManager.shutdown();
         }
-        if (jailManager != null) {
-            jailManager.shutdown();
+        // Shutdown NPC manager
+        if (npcManager != null) {
+            npcManager.shutdown();
         }
-
+        // Now close storage connections
+        if (storageManager != null) {
+            storageManager.shutdown();
+        }
         // Cancel all tasks
         getServer().getScheduler().cancelTasks(this);
-
         getLogger().info("EdenCorrections plugin disabled!");
     }
 
@@ -312,7 +332,14 @@ public class EdenCorrections extends JavaPlugin {
         getLogger().info("Reloading EdenCorrections plugin...");
 
         try {
+            // Set emergency shutdown during reload to prevent conflicts
+            setEmergencyShutdown(true);
+            
+            // Cancel all running tasks first
+            getServer().getScheduler().cancelTasks(this);
+            
             // Reload configuration first
+            reloadConfig();
             configManager.reload();
 
             // Reload LocationManager
@@ -346,15 +373,42 @@ public class EdenCorrections extends JavaPlugin {
             if (guardPenaltyManager != null) {
                 guardPenaltyManager.reload();
             }
+            if (guardProgressionManager != null) {
+                guardProgressionManager.reload();
+            }
 
             // Reload enforcement managers
             if (chaseManager != null) {
                 chaseManager.reload();
             }
+            if (guardItemManager != null) {
+                guardItemManager.reload();
+            }
+            if (jailManager != null) {
+                jailManager.reload();
+            }
+            if (wantedLevelManager != null) {
+                wantedLevelManager.reload();
+            }
+
+            // Reload external integrations
+            if (externalPluginIntegration != null) {
+                externalPluginIntegration.reload();
+            }
+
+            // Reload token manager
+            if (guardTokenManager != null) {
+                guardTokenManager.reload();
+            }
+
+            // Re-enable systems after reload
+            setEmergencyShutdown(false);
 
             getLogger().info("EdenCorrections plugin reloaded successfully!");
         } catch (Exception e) {
             getLogger().log(Level.SEVERE, "Error during plugin reload", e);
+            // Keep emergency shutdown active if reload failed
+            getLogger().warning("Emergency shutdown remains active due to reload failure. Use '/cor emergency off' to restore systems.");
         }
     }
 
@@ -435,58 +489,6 @@ public class EdenCorrections extends JavaPlugin {
             return dm;
         }
         throw new IllegalStateException("StorageManager is not a DataManager. This method is only valid for legacy/compatibility mode.");
-    }
-
-    /**
-     * Get the kit name for a given guard rank
-     * @param rank The guard rank
-     * @return The kit name from config, or the rank name if not configured
-     * @deprecated Use GuardRankManager.getKitNameForPlayer() instead
-     */
-    @Deprecated
-    public String getKitForRank(String rank) {
-        // Check if rank is null or empty
-        if (rank == null || rank.isEmpty()) {
-            return "guard"; // Default kit
-        }
-
-        // Check for custom kit override in config
-        return configManager.getDutyConfig().rankKits.getOrDefault(rank.toLowerCase(), rank);
-    }
-
-    /**
-     * Get the guard rank of a player from their permissions
-     * @param player The player to check
-     * @return The highest guard rank the player has, or null if none
-     * @deprecated Use GuardRankManager.getPlayerRank() instead
-     */
-    @Deprecated
-    public String getPlayerGuardRank(Player player) {
-        if (player == null) {
-            return null;
-        }
-
-        String highestRank = null;
-        int highestPriority = -1;
-
-        // Check each possible rank from config
-        var rankKits = configManager.getDutyConfig().rankKits;
-        if (rankKits != null && !rankKits.isEmpty()) {
-            int priority = 0;
-            for (String rank : rankKits.keySet()) {
-                // Check for the rank permission
-                if (player.hasPermission("edencorrections.rank." + rank)) {
-                    // If this rank has higher priority (checked later in config), use it
-                    if (priority > highestPriority) {
-                        highestRank = rank;
-                        highestPriority = priority;
-                    }
-                }
-                priority++;
-            }
-        }
-
-        return highestRank;
     }
 
     /**
@@ -589,5 +591,37 @@ public class EdenCorrections extends JavaPlugin {
 
     public ContrabandManager getContrabandManager() {
         return contrabandManager;
+    }
+
+    public ModernLootManager getModernLootManager() {
+        return modernLootManager;
+    }
+
+    public SafezoneManager getSafezoneManager() {
+        return safezoneManager;
+    }
+
+    /**
+     * Emergency killswitch - disables all plugin operations
+     */
+    public static void setEmergencyShutdown(boolean shutdown) {
+        emergencyShutdown = shutdown;
+        
+        // Propagate to managers
+        DutyManager.setEmergencyShutdown(shutdown);
+        LocationManager.setEmergencyShutdown(shutdown);
+        
+        if (shutdown) {
+            getInstance().getLogger().warning("EMERGENCY SHUTDOWN ACTIVATED - All plugin operations disabled");
+        } else {
+            getInstance().getLogger().info("Emergency shutdown deactivated - Plugin operations restored");
+        }
+    }
+
+    /**
+     * Check if emergency shutdown is active
+     */
+    public static boolean isEmergencyShutdown() {
+        return emergencyShutdown;
     }
 }

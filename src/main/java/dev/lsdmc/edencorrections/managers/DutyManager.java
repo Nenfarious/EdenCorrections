@@ -67,6 +67,9 @@ public class DutyManager {
     private File inventoryFile;
     private FileConfiguration inventoryConfig;
 
+    // Emergency killswitch
+    private static volatile boolean emergencyShutdown = false;
+
     public DutyManager(EdenCorrections plugin, NPCManager npcManager) {
         this.plugin = plugin;
         this.configManager = plugin.getConfigManager();
@@ -120,19 +123,58 @@ public class DutyManager {
             offDutyMinutes.putAll(loadedOffDutyMinutes);
         }
 
-        // Start duty timers for online players who are on duty
+        // FIXED: Don't automatically start duty timers on plugin load
+        // Instead, only start timers when a player explicitly joins and validates their duty area
+        // This prevents auto-duty behavior for players who may have disconnected while on duty
+        
+        // Clean up any stale duty statuses for players who may have left improperly
         Bukkit.getScheduler().runTaskLater(plugin, () -> {
+            // Only process currently online players
             for (Player player : Bukkit.getOnlinePlayers()) {
-                if (isOnDuty(player.getUniqueId())) {
-                    startDutyTimer(player);
+                UUID playerId = player.getUniqueId();
+                
+                // If player is marked as on duty but hasn't been validated, clear the status
+                if (isOnDuty(playerId)) {
+                    plugin.getLogger().info("Player " + player.getName() + " was marked as on duty from previous session. Clearing status - they must manually go on duty again.");
+                    
+                    // Clear duty status to prevent auto-duty
+                    dutyStatus.put(playerId, false);
+                    storageManager.saveDutyStatus(playerId, false);
+                    
+                    // Notify player
+                    player.sendMessage(MessageUtils.getPrefix(plugin).append(
+                        MessageUtils.parseMessage("<yellow>Your duty status has been reset. Please use /duty to go on duty.</yellow>")
+                    ));
                 }
             }
-        }, 40L); // Start after 2 seconds to ensure server is fully loaded
+        }, 60L); // Wait 3 seconds for full server startup
     }
 
     public void toggleDuty(Player player) {
+        // Emergency killswitch check
+        if (emergencyShutdown) {
+            player.sendMessage(MessageUtils.getPrefix(plugin).append(
+                MessageUtils.parseMessage("<red>Guard systems are temporarily disabled for maintenance.</red>")));
+            return;
+        }
+
         UUID playerId = player.getUniqueId();
         boolean isOnDuty = dutyStatus.getOrDefault(playerId, false);
+
+        // CRITICAL FIX: Prevent execution if player is already immobilized/preparing for duty
+        if (immobilizedGuards.containsKey(playerId)) {
+            long endTime = immobilizedGuards.get(playerId);
+            int remainingSeconds = Math.max(0, (int)((endTime - System.currentTimeMillis()) / 1000));
+            
+            if (remainingSeconds > 0) {
+                player.sendMessage(MessageUtils.getPrefix(plugin).append(
+                    MessageUtils.parseMessage("<red>You are already preparing for duty! Please wait " + remainingSeconds + " more seconds.</red>")));
+                return;
+            } else {
+                // Clean up stale immobilization data
+                clearImmobilization(playerId);
+            }
+        }
 
         // REGION/NPC CHECK: Only allow going on duty if in a valid area
         if (!isOnDuty) {
@@ -165,81 +207,48 @@ public class DutyManager {
     }
 
     private boolean goOnDuty(Player player) {
-        UUID uuid = player.getUniqueId();
+        UUID playerId = player.getUniqueId();
 
-        // Defensive: REGION/NPC CHECK again in case called from elsewhere
-        if (!isPlayerInDutyArea(player)) {
-            String msg = messagesConfig.notInArea != null && !messagesConfig.notInArea.isEmpty()
-                    ? messagesConfig.notInArea
-                    : messagesConfig.notInRegion;
-            if (msg == null || msg.isEmpty()) {
-                msg = "<red>You must be in a designated duty area to go on/off duty!</red>";
-            }
-            player.sendMessage(MessageUtils.getPrefix(plugin).append(MessageUtils.parseMessage(msg)));
-            return false;
-        }
-
-        // Check if already on duty
-        if (dutyStatus.getOrDefault(uuid, false)) {
-            Component message = MessageUtils.parseMessage(messagesConfig.alreadyOnDuty);
-            player.sendMessage(MessageUtils.getPrefix(plugin).append(message));
-            return false;
-        }
-
-        // Log rank information for debugging
-        String playerRank = plugin.getGuardRankManager().getPlayerRank(player);
-        if (configManager.isLogRankDetection()) {
-            plugin.getLogger().info("Player " + player.getName() + " going on duty with rank: " + playerRank);
-        }
-
-        // Save current inventory if needed
+        // Store and clear inventory if enabled
         if (dutyConfig.clearInventory) {
             savePlayerInventory(player);
+            player.getInventory().clear();
         }
 
-        // Set duty status
-        dutyStatus.put(uuid, true);
-        dutyStartTimes.put(uuid, System.currentTimeMillis());
+        // Set duty status and start time
+        dutyStatus.put(playerId, true);
+        dutyStartTimes.put(playerId, System.currentTimeMillis());
 
-        // Save data to StorageManager
-        storageManager.saveDutyStatus(uuid, true);
-        storageManager.saveDutyStartTime(uuid, System.currentTimeMillis());
+        // Apply duty start immobilization
+        applyDutyStartImmobilization(player);
 
-        // Reset activity counters for the new session
-        storageManager.resetActivityCounts(uuid);
+        // Give guard kit based on rank
+        executeRankKitCommand(player);
 
-        // Send message
-        Component message = MessageUtils.parseMessage(messagesConfig.onDuty);
-        player.sendMessage(MessageUtils.getPrefix(plugin).append(message));
-
-        // Play sound
-        if (dutyConfig.onDutySound != null && !dutyConfig.onDutySound.isEmpty()) {
-            try {
-                String[] parts = dutyConfig.onDutySound.split(":");
-                if (parts.length > 1) {
-                    player.playSound(player.getLocation(), Sound.valueOf(parts[1].toUpperCase()), 1.0f, 1.0f);
-                }
-            } catch (Exception ignored) {
-                // Invalid sound, just ignore
-            }
-        }
-
-        // Broadcast if enabled
+        // Broadcast message if enabled
         if (dutyConfig.broadcast && !messagesConfig.broadcastOnDuty.isEmpty()) {
-            Component broadcast = MessageUtils.parseMessage(messagesConfig.broadcastOnDuty
-                    .replace("{player}", player.getName()));
-            Bukkit.broadcast(MessageUtils.getPrefix(plugin).append(broadcast));
+            Component message = MessageUtils.parseMessage(messagesConfig.broadcastOnDuty.replace("{player}", player.getName()));
+            Bukkit.broadcast(message);
         }
 
-        // Start duty timer for the player
+        // Update guard count and buffs
+        plugin.getGuardBuffManager().onGuardJoin(player);
+
+        // Start duty timer (for rewards and tracking)
         startDutyTimer(player);
 
-        // Notify guard buff manager about new guard
-        plugin.getServer().getPluginManager().callEvent(new GuardDutyStartEvent(player));
+        // Statistics tracking
+        if (plugin.getGuardStatisticsManager().isStatisticsEnabled()) {
+            plugin.getGuardStatisticsManager().startDutySession(player);
+        }
 
-        // Record duty session
-        plugin.getGuardStatisticsManager().startDutySession(player);
+        // Handle wanted level manager integration (for spyglass glow effects)
+        plugin.getWantedLevelManager().handleGuardJoin(player);
 
+        // Fire custom event
+        Bukkit.getPluginManager().callEvent(new dev.lsdmc.edencorrections.events.GuardDutyStartEvent(player));
+
+        plugin.getLogger().info(player.getName() + " went on duty");
         return true;
     }
 
@@ -247,11 +256,36 @@ public class DutyManager {
      * Applies immobilization effect to a guard going on duty
      */
     private void applyDutyStartImmobilization(Player player) {
+        UUID playerId = player.getUniqueId();
+        
+        // CRITICAL: Check if player is already immobilized to prevent duplicate processes
+        if (immobilizedGuards.containsKey(playerId)) {
+            long endTime = immobilizedGuards.get(playerId);
+            int remainingSeconds = Math.max(0, (int)((endTime - System.currentTimeMillis()) / 1000));
+            
+            if (remainingSeconds > 0) {
+                plugin.getLogger().warning("Attempted to start immobilization for " + player.getName() + " but they are already immobilized for " + remainingSeconds + " more seconds - skipping");
+                return;
+            } else {
+                // Clean up stale immobilization data
+                clearImmobilization(playerId);
+            }
+        }
+        
+        // CRITICAL: Check if there's already an active immobilization task
+        if (immobilizationTasks.containsKey(playerId)) {
+            BukkitTask existingTask = immobilizationTasks.get(playerId);
+            if (existingTask != null && !existingTask.isCancelled()) {
+                plugin.getLogger().warning("Attempted to start immobilization for " + player.getName() + " but they already have an active immobilization task - cancelling old task");
+                existingTask.cancel();
+                immobilizationTasks.remove(playerId);
+            }
+        }
+        
         // Fixed 30 second immobilization
         int seconds = 30;
 
         // Create immobilization status tracker
-        UUID playerId = player.getUniqueId();
         immobilizedGuards.put(playerId, System.currentTimeMillis() + (seconds * 1000));
 
         // Apply visual effects
@@ -285,6 +319,20 @@ public class DutyManager {
 
             @Override
             public void run() {
+                // CRITICAL: Check if player went offline or is no longer immobilized
+                if (!player.isOnline() || !immobilizedGuards.containsKey(playerId)) {
+                    // Clean up and cancel
+                    if (countdownBar != null) {
+                        countdownBar.removeAll();
+                    }
+                    if (immobilizationTasks.containsKey(playerId)) {
+                        immobilizationTasks.get(playerId).cancel();
+                        immobilizationTasks.remove(playerId);
+                    }
+                    clearImmobilization(playerId);
+                    return;
+                }
+                
                 secondsLeft--;
 
                 if (secondsLeft <= 0) {
@@ -320,14 +368,41 @@ public class DutyManager {
     private void finishImmobilization(Player player, BossBar countdownBar, Runnable task) {
         UUID playerId = player.getUniqueId();
 
-        // Actually set the player as on duty
-        goOnDuty(player);
+        // CRITICAL: Check if player is already on duty to prevent duplicate execution
+        if (dutyStatus.getOrDefault(playerId, false)) {
+            plugin.getLogger().warning("Attempted to finish immobilization for " + player.getName() + " who is already on duty - skipping");
+            // Clean up the boss bar and task anyway
+            if (countdownBar != null) {
+                countdownBar.removeAll();
+            }
+            if (immobilizationTasks.containsKey(playerId)) {
+                immobilizationTasks.get(playerId).cancel();
+                immobilizationTasks.remove(playerId);
+            }
+            return;
+        }
+
+        // CRITICAL: Check if immobilization was already completed/cancelled
+        if (!immobilizedGuards.containsKey(playerId)) {
+            plugin.getLogger().warning("Attempted to finish immobilization for " + player.getName() + " but no immobilization record found - skipping");
+            // Clean up the boss bar and task anyway
+            if (countdownBar != null) {
+                countdownBar.removeAll();
+            }
+            return;
+        }
+
+        // Set duty status and start time (do not call goOnDuty again)
+        dutyStatus.put(playerId, true);
+        dutyStartTimes.put(playerId, System.currentTimeMillis());
 
         // Remove from tracking
         immobilizedGuards.remove(playerId);
 
         // Remove boss bar
-        countdownBar.removeAll();
+        if (countdownBar != null) {
+            countdownBar.removeAll();
+        }
 
         // Cancel task
         if (immobilizationTasks.containsKey(playerId)) {
@@ -335,32 +410,128 @@ public class DutyManager {
             immobilizationTasks.remove(playerId);
         }
 
-        // Now execute delayed actions
+        // Inventory caching (save on duty if enabled)
+        if (dutyConfig.inventoryCacheEnabled && dutyConfig.inventoryCacheSaveOnDuty) {
+            try {
+                savePlayerInventoryWithConfig(player);
+            } catch (Exception e) {
+                plugin.getLogger().warning("Failed to save inventory for " + player.getName() + " during duty start: " + e.getMessage());
+                // Continue with duty process
+            }
+        }
 
-        // Execute on-duty commands
-        executeCommands(player, dutyConfig.onDutyCommands);
+        // Clear inventory if enabled (this was missing!)
+        if (dutyConfig.clearInventory) {
+            try {
+                player.getInventory().clear();
+                if (configManager.isDebugEnabled()) {
+                    plugin.getLogger().info("Cleared inventory for " + player.getName() + " when going on duty");
+                }
+            } catch (Exception e) {
+                plugin.getLogger().warning("Failed to clear inventory for " + player.getName() + " during duty start: " + e.getMessage());
+                // Continue with duty process
+            }
+        }
 
-        // Execute rank-specific kit command
-        executeRankKitCommand(player);
+        // Give guard kit based on rank
+        try {
+            executeRankKitCommand(player);
+        } catch (Exception e) {
+            plugin.getLogger().warning("Failed to give kit to " + player.getName() + " during duty start: " + e.getMessage());
+            // Continue with duty process
+        }
+
+        // Update guard count and buffs
+        try {
+            plugin.getGuardBuffManager().onGuardJoin(player);
+        } catch (Exception e) {
+            plugin.getLogger().warning("Failed to update guard buffs for " + player.getName() + ": " + e.getMessage());
+            // Continue with duty process
+        }
+
+        // Start duty timer
+        try {
+            startDutyTimer(player);
+        } catch (Exception e) {
+            plugin.getLogger().warning("Failed to start duty timer for " + player.getName() + ": " + e.getMessage());
+            // Continue with duty process
+        }
+
+        // Statistics tracking
+        try {
+            if (plugin.getGuardStatisticsManager().isStatisticsEnabled()) {
+                plugin.getGuardStatisticsManager().startDutySession(player);
+            }
+        } catch (Exception e) {
+            plugin.getLogger().warning("Failed to start statistics session for " + player.getName() + ": " + e.getMessage());
+            // Continue with duty process
+        }
+
+        // Handle wanted level manager integration (for spyglass glow effects)
+        // CRITICAL: Wrap this in try-catch as this is where the team packet error occurs
+        try {
+            plugin.getWantedLevelManager().handleGuardJoin(player);
+        } catch (Exception e) {
+            plugin.getLogger().warning("Failed to handle guard join for WantedLevelManager for " + player.getName() + ": " + e.getMessage());
+            // Continue with duty process - this is not critical for duty functionality
+        }
+
+        // Fire custom event
+        try {
+            Bukkit.getPluginManager().callEvent(new dev.lsdmc.edencorrections.events.GuardDutyStartEvent(player));
+        } catch (Exception e) {
+            plugin.getLogger().warning("Failed to fire GuardDutyStartEvent for " + player.getName() + ": " + e.getMessage());
+            // Continue with duty process
+        }
 
         // Send ready message
-        Component readyMessage = MessageUtils.parseMessage("<green>You are now on duty and ready to patrol!</green>");
-        player.sendMessage(MessageUtils.getPrefix(plugin).append(readyMessage));
+        try {
+            Component readyMessage = MessageUtils.parseMessage("<green>You are now on duty and ready to patrol!</green>");
+            player.sendMessage(MessageUtils.getPrefix(plugin).append(readyMessage));
+        } catch (Exception e) {
+            plugin.getLogger().warning("Failed to send ready message to " + player.getName() + ": " + e.getMessage());
+            // Continue with duty process
+        }
 
         // Send final broadcast
-        Component finalBroadcast = MessageUtils.parseMessage("<red>ALERT: " + player.getName() + " is now on duty and patrolling!</red>");
-        Bukkit.broadcast(finalBroadcast);
+        try {
+            Component finalBroadcast = MessageUtils.parseMessage("<red>ALERT: " + player.getName() + " is now on duty and patrolling!</red>");
+            Bukkit.broadcast(finalBroadcast);
+        } catch (Exception e) {
+            plugin.getLogger().warning("Failed to send final broadcast for " + player.getName() + ": " + e.getMessage());
+            // Continue with duty process
+        }
 
         // Play alert sound for all players
-        for (Player onlinePlayer : Bukkit.getOnlinePlayers()) {
-            onlinePlayer.playSound(onlinePlayer.getLocation(), Sound.ENTITY_ENDER_DRAGON_GROWL, 0.3f, 1.0f);
+        try {
+            for (Player onlinePlayer : Bukkit.getOnlinePlayers()) {
+                onlinePlayer.playSound(onlinePlayer.getLocation(), Sound.ENTITY_ENDER_DRAGON_GROWL, 0.3f, 1.0f);
+            }
+        } catch (Exception e) {
+            plugin.getLogger().warning("Failed to play alert sounds for " + player.getName() + " duty start: " + e.getMessage());
+            // Continue with duty process
         }
+
+        plugin.getLogger().info(player.getName() + " went on duty");
     }
 
     /**
      * Check if a player is currently immobilized
      */
     public boolean isPlayerImmobilized(UUID playerId) {
+        if (emergencyShutdown) return false;
+        
+        // Check if player is in the immobilized map with a valid timestamp
+        if (immobilizedGuards.containsKey(playerId)) {
+            long endTime = immobilizedGuards.get(playerId);
+            if (System.currentTimeMillis() < endTime) {
+                return true;
+            } else {
+                // Clean up expired immobilization
+                clearImmobilization(playerId);
+            }
+        }
+        
         return immobilizedPlayers.getOrDefault(playerId, false);
     }
 
@@ -391,157 +562,76 @@ public class DutyManager {
     }
 
     private boolean goOffDuty(Player player) {
-        UUID uuid = player.getUniqueId();
+        UUID playerId = player.getUniqueId();
 
-        // Check if already off duty
-        if (!dutyStatus.getOrDefault(uuid, false)) {
-            Component message = MessageUtils.parseMessage(messagesConfig.alreadyOffDuty);
-            player.sendMessage(MessageUtils.getPrefix(plugin).append(message));
-            return false;
-        }
+        // Clear immobilization if active
+        clearImmobilization(playerId);
 
         // Calculate time served
-        long onDutyTime = System.currentTimeMillis() - dutyStartTimes.getOrDefault(uuid, System.currentTimeMillis());
-        int minutesServed = (int) (onDutyTime / (1000 * 60));
+        Long startTime = dutyStartTimes.get(playerId);
+        int minutesServed = 0;
+        if (startTime != null) {
+            long timeServed = System.currentTimeMillis() - startTime;
+            minutesServed = (int) (timeServed / (1000 * 60));
+            dutyStartTimes.remove(playerId);
+        }
 
-        // Set duty status
-        dutyStatus.put(uuid, false);
+        // Update duty status
+        dutyStatus.put(playerId, false);
 
-        // Save data to StorageManager
-        storageManager.saveDutyStatus(uuid, false);
+        // Check for time reward
+        if (minutesServed >= dutyConfig.thresholdMinutes) {
+            int currentMinutes = offDutyMinutes.getOrDefault(playerId, 0);
+            int newMinutes = Math.min(currentMinutes + dutyConfig.rewardMinutes, dutyConfig.maxOffDutyTime);
+            offDutyMinutes.put(playerId, newMinutes);
 
-        // Execute off-duty commands
-        executeCommands(player, dutyConfig.offDutyCommands);
+            // Send reward message
+            Component rewardMessage = MessageUtils.parseMessage(
+                messagesConfig.offDutyReward.replace("{minutes}", String.valueOf(dutyConfig.rewardMinutes)));
+            player.sendMessage(MessageUtils.getPrefix(plugin).append(rewardMessage));
 
-        // Restore inventory if needed
+            // Check if we hit the cap
+            if (newMinutes >= dutyConfig.maxOffDutyTime) {
+                Component capMessage = MessageUtils.parseMessage(
+                    messagesConfig.timeAddedCapped.replace("{max}", String.valueOf(dutyConfig.maxOffDutyTime)));
+                player.sendMessage(MessageUtils.getPrefix(plugin).append(capMessage));
+            }
+        }
+
+        // Clear inventory and restore previous inventory
+        player.getInventory().clear();
         if (dutyConfig.clearInventory) {
             restorePlayerInventory(player);
         }
 
-        // Award off-duty time if threshold met
-        if (minutesServed >= dutyConfig.thresholdMinutes) {
-            // Add time with cap
-            int current = offDutyMinutes.getOrDefault(uuid, 0);
-            int newTotal = Math.min(current + dutyConfig.rewardMinutes, dutyConfig.maxOffDutyTime);
-            boolean capped = (current + dutyConfig.rewardMinutes) > dutyConfig.maxOffDutyTime;
-
-            offDutyMinutes.put(uuid, newTotal);
-            storageManager.saveOffDutyMinutes(uuid, newTotal);
-
-            if (capped) {
-                Component rewardMessage = MessageUtils.parseMessage(messagesConfig.timeAddedCapped
-                        .replace("{max}", String.valueOf(dutyConfig.maxOffDutyTime)));
-                player.sendMessage(MessageUtils.getPrefix(plugin).append(rewardMessage));
-            } else {
-                Component rewardMessage = MessageUtils.parseMessage(messagesConfig.offDutyReward
-                        .replace("{minutes}", String.valueOf(dutyConfig.rewardMinutes)));
-                player.sendMessage(MessageUtils.getPrefix(plugin).append(rewardMessage));
-            }
-        } else {
-            // Didn't reach threshold
-            Component noRewardMessage = MessageUtils.parseMessage(
-                    "<yellow>You served for " + minutesServed + " minutes. Serve at least " +
-                            dutyConfig.thresholdMinutes + " minutes to earn off-duty time.</yellow>");
-            player.sendMessage(MessageUtils.getPrefix(plugin).append(noRewardMessage));
-        }
-
-        // Send message
-        Component message = MessageUtils.parseMessage(messagesConfig.offDuty);
-        player.sendMessage(MessageUtils.getPrefix(plugin).append(message));
-
-        // Play sound
-        if (dutyConfig.offDutySound != null && !dutyConfig.offDutySound.isEmpty()) {
-            try {
-                String[] parts = dutyConfig.offDutySound.split(":");
-                if (parts.length > 1) {
-                    player.playSound(player.getLocation(), Sound.valueOf(parts[1].toUpperCase()), 1.0f, 1.0f);
-                }
-            } catch (Exception ignored) {
-                // Invalid sound, just ignore
-            }
-        }
-
-        // Broadcast if enabled
+        // Broadcast message if enabled
         if (dutyConfig.broadcast && !messagesConfig.broadcastOffDuty.isEmpty()) {
-            Component broadcast = MessageUtils.parseMessage(messagesConfig.broadcastOffDuty
-                    .replace("{player}", player.getName()));
-            Bukkit.broadcast(MessageUtils.getPrefix(plugin).append(broadcast));
+            Component message = MessageUtils.parseMessage(messagesConfig.broadcastOffDuty.replace("{player}", player.getName()));
+            Bukkit.broadcast(message);
         }
+
+        // Update guard count and buffs
+        plugin.getGuardBuffManager().onGuardQuit(player);
 
         // Cancel duty timer
-        if (playerTimers.containsKey(uuid)) {
-            playerTimers.get(uuid).cancel();
-            playerTimers.remove(uuid);
+        if (playerTimers.containsKey(playerId)) {
+            playerTimers.get(playerId).cancel();
+            playerTimers.remove(playerId);
         }
 
-        // Notify guard buff manager about guard going off duty
-        plugin.getServer().getPluginManager().callEvent(new GuardDutyEndEvent(player));
+        // Statistics tracking
+        if (plugin.getGuardStatisticsManager().isStatisticsEnabled()) {
+            plugin.getGuardStatisticsManager().endDutySession(player);
+        }
 
-        // Record duty session
-        plugin.getGuardStatisticsManager().endDutySession(player);
+        // Handle wanted level manager integration (remove glow effects for this guard)
+        plugin.getWantedLevelManager().handleGuardLeave(player);
 
+        // Fire custom event
+        Bukkit.getPluginManager().callEvent(new dev.lsdmc.edencorrections.events.GuardDutyEndEvent(player));
+
+        plugin.getLogger().info(player.getName() + " went off duty after " + minutesServed + " minutes");
         return true;
-    }
-
-    /**
-     * Execute a list of commands for a player
-     * @param player The player to execute commands for
-     * @param commands The list of commands to execute
-     */
-    private void executeCommands(Player player, List<String> commands) {
-        if (commands == null || commands.isEmpty()) {
-            return;
-        }
-
-        String playerName = player.getName();
-        String playerUUID = player.getUniqueId().toString();
-
-        // Schedule command execution on the main thread
-        Bukkit.getScheduler().runTask(plugin, () -> {
-            for (String command : commands) {
-                // Replace placeholders
-                String processedCommand = command
-                        .replace("{player}", playerName)
-                        .replace("{uuid}", playerUUID);
-
-                // Execute command
-                try {
-                    if (processedCommand.startsWith("[player]")) {
-                        // Player command
-                        String playerCommand = processedCommand.substring(8).trim();
-                        if (configManager.isDebugEnabled()) {
-                            plugin.getLogger().info("Executing player command for " + player.getName() + ": " + playerCommand);
-                        }
-                        player.performCommand(playerCommand);
-                    } else if (processedCommand.startsWith("[op]") && !player.isOp()) {
-                        // OP command - temporarily make player OP
-                        String opCommand = processedCommand.substring(4).trim();
-                        boolean wasOp = player.isOp();
-                        try {
-                            if (configManager.isDebugEnabled()) {
-                                plugin.getLogger().info("Executing OP command for " + player.getName() + ": " + opCommand);
-                            }
-                            player.setOp(true);
-                            player.performCommand(opCommand);
-                        } finally {
-                            // Ensure we always reset OP status
-                            if (!wasOp) {
-                                player.setOp(false);
-                            }
-                        }
-                    } else {
-                        // Console command
-                        if (configManager.isDebugEnabled()) {
-                            plugin.getLogger().info("Executing console command for " + player.getName() + ": " + processedCommand);
-                        }
-                        Bukkit.dispatchCommand(Bukkit.getConsoleSender(), processedCommand);
-                    }
-                } catch (Exception e) {
-                    plugin.getLogger().warning("Error executing command: " + processedCommand);
-                    plugin.getLogger().warning(e.getMessage());
-                }
-            }
-        });
     }
 
     /**
@@ -595,52 +685,76 @@ public class DutyManager {
 
         // Create a new timer that runs every minute
         BukkitTask task = Bukkit.getScheduler().runTaskTimerAsynchronously(plugin, () -> {
-            // Skip if player is offline or not on duty anymore
-            if (!player.isOnline() || !dutyStatus.getOrDefault(uuid, false)) {
-                // Cancel the timer
-                if (playerTimers.containsKey(uuid)) {
-                    playerTimers.get(uuid).cancel();
-                    playerTimers.remove(uuid);
+            try {
+                // Skip if player is offline or not on duty anymore
+                if (!player.isOnline() || !dutyStatus.getOrDefault(uuid, false)) {
+                    // Cancel the timer
+                    if (playerTimers.containsKey(uuid)) {
+                        playerTimers.get(uuid).cancel();
+                        playerTimers.remove(uuid);
+                    }
+                    return;
                 }
-                return;
-            }
 
-            // Calculate time served so far
-            long startTime = dutyStartTimes.getOrDefault(uuid, System.currentTimeMillis());
-            long onDutyTime = System.currentTimeMillis() - startTime;
-            int minutesServed = (int) (onDutyTime / (1000 * 60));
+                // Calculate time served so far
+                long startTime = dutyStartTimes.getOrDefault(uuid, System.currentTimeMillis());
+                long onDutyTime = System.currentTimeMillis() - startTime;
+                int minutesServed = (int) (onDutyTime / (1000 * 60));
 
-            // Every 2 minutes on duty = 1 minute off duty time
-            if (minutesServed % 2 == 0 && minutesServed > 0) {
-                addOffDutyMinutes(uuid, 1);
-            }
+                // Every 2 minutes on duty = 1 minute off duty time
+                if (minutesServed % 2 == 0 && minutesServed > 0) {
+                    try {
+                        addOffDutyMinutes(uuid, 1);
+                    } catch (Exception e) {
+                        plugin.getLogger().warning("Failed to add off-duty minutes for " + player.getName() + ": " + e.getMessage());
+                        // Continue with other operations
+                    }
+                }
 
-            // Update progression system with time served
-            plugin.getGuardProgressionManager().updateTimeServed(player, 60); // 60 seconds per minute
+                // Update progression system with time served
+                try {
+                    plugin.getGuardProgressionManager().updateTimeServed(player, 60); // 60 seconds per minute
+                } catch (Exception e) {
+                    plugin.getLogger().warning("Failed to update time served for " + player.getName() + ": " + e.getMessage());
+                    // Continue with other operations
+                }
 
-            // Check if player has exceeded their off-duty time
-            if (!isOnDuty(uuid)) {
-                int currentOffDutyTime = getRemainingOffDutyMinutes(uuid);
-                if (currentOffDutyTime <= 1) {
-                    // Send warning message 1 minute before duty ends
-                    Component warningMsg = MessageUtils.parseMessage("<red>Warning: Your off-duty time ends in 1 minute!</red>");
-                    player.sendMessage(MessageUtils.getPrefix(plugin).append(warningMsg));
-                } else if (currentOffDutyTime <= -3) {
-                    // Force teleport after 3 minutes grace period
-                    Bukkit.getScheduler().runTask(plugin, () -> {
-                        // Teleport to guard lounge
-                        Location guardLounge = getGuardLoungeLocation();
-                        if (guardLounge != null) {
-                            player.teleport(guardLounge);
+                // Check if player has exceeded their off-duty time
+                if (!isOnDuty(uuid)) {
+                    try {
+                        int currentOffDutyTime = getRemainingOffDutyMinutes(uuid);
+                        if (currentOffDutyTime <= 1) {
+                            // Send warning message 1 minute before duty ends
+                            Component warningMsg = MessageUtils.parseMessage("<red>Warning: Your off-duty time ends in 1 minute!</red>");
+                            player.sendMessage(MessageUtils.getPrefix(plugin).append(warningMsg));
+                        } else if (currentOffDutyTime <= -3) {
+                            // Force teleport after 3 minutes grace period
+                            Bukkit.getScheduler().runTask(plugin, () -> {
+                                try {
+                                    // Teleport to guard lounge
+                                    Location guardLounge = getGuardLoungeLocation();
+                                    if (guardLounge != null) {
+                                        player.teleport(guardLounge);
+                                    }
+                                    
+                                    // Force on duty with penalty
+                                    toggleDuty(player);
+                                    
+                                    // Add penalty time (12 minutes of required duty)
+                                    player.sendMessage(MessageUtils.parseMessage("<red>You have exceeded your off-duty time by 3 minutes. You must serve 12 minutes of duty time as penalty.</red>"));
+                                } catch (Exception e) {
+                                    plugin.getLogger().warning("Failed to handle off-duty time penalty for " + player.getName() + ": " + e.getMessage());
+                                }
+                            });
                         }
-                        
-                        // Force on duty with penalty
-                        toggleDuty(player);
-                        
-                        // Add penalty time (12 minutes of required duty)
-                        player.sendMessage(MessageUtils.parseMessage("<red>You have exceeded your off-duty time by 3 minutes. You must serve 12 minutes of duty time as penalty.</red>"));
-                    });
+                    } catch (Exception e) {
+                        plugin.getLogger().warning("Failed to check off-duty time for " + player.getName() + ": " + e.getMessage());
+                        // Continue with timer
+                    }
                 }
+            } catch (Exception e) {
+                plugin.getLogger().warning("Error in duty timer for " + player.getName() + ": " + e.getMessage());
+                // Don't crash the timer, just log the error and continue
             }
         }, 20L * 60, 20L * 60); // Run every minute
 
@@ -656,8 +770,8 @@ public class DutyManager {
      * This method combines both region and NPC checks
      */
     public boolean isPlayerInDutyArea(Player player) {
-        // If NPC system is enabled, check if player is near a duty NPC
-        if (dutyConfig.npcEnabled && npcManager.isNearDutyNpc(player)) {
+        // If NPC system is enabled, check if player is near a Corrections NPC
+        if (npcManager.isNearCorrectionsNpc(player)) {
             return true;
         }
 
@@ -667,7 +781,7 @@ public class DutyManager {
         }
 
         // If neither system is enabled, allow toggle anywhere
-        return !dutyConfig.npcEnabled && !dutyConfig.regionEnabled;
+        return !dutyConfig.regionEnabled;
     }
 
     /**
@@ -831,49 +945,58 @@ public class DutyManager {
         }
     }
 
+    /**
+     * Convert off-duty minutes to tokens (guards only)
+     */
     public boolean convertOffDutyMinutes(Player player, int minutes) {
-        UUID uuid = player.getUniqueId();
-        int current = offDutyMinutes.getOrDefault(uuid, 0);
-
-        // Check if player has enough minutes
-        if (current < minutes) {
-            Component message = MessageUtils.parseMessage("<red>You don't have enough off-duty time!</red>");
-            player.sendMessage(MessageUtils.getPrefix(plugin).append(message));
+        // Emergency shutdown check
+        if (emergencyShutdown) {
+            player.sendMessage(MessageUtils.parseMessage("<red>System is temporarily disabled.</red>"));
             return false;
         }
 
-        // Get conversion ratio from centralized config
-        ConfigManager.ConversionConfig conversionConfig = configManager.getConversionConfig();
-        int ratio = conversionConfig.tokensPerMinuteRatio;
-        int tokens = minutes * ratio;
-
-        // Remove minutes
-        offDutyMinutes.put(uuid, current - minutes);
-        storageManager.saveOffDutyMinutes(uuid, offDutyMinutes.get(uuid));
-
-        // Send message
-        Component message = MessageUtils.parseMessage(messagesConfig.convertedTime
-                .replace("{minutes}", String.valueOf(minutes))
-                .replace("{tokens}", String.valueOf(tokens)));
-        player.sendMessage(MessageUtils.getPrefix(plugin).append(message));
-
-        // Execute token conversion command if configured
-        String tokenCommand = conversionConfig.tokenCommand;
-        if (tokenCommand != null && !tokenCommand.isEmpty()) {
-            String command = tokenCommand
-                    .replace("{player}", player.getName())
-                    .replace("{amount}", String.valueOf(tokens));
-
-            if (configManager.isDebugEnabled()) {
-                plugin.getLogger().info("Executing token conversion command: " + command);
-            }
-            Bukkit.dispatchCommand(Bukkit.getConsoleSender(), command);
-            
-            // Record tokens earned
-            plugin.getGuardStatisticsManager().recordTokensEarned(player, tokens);
+        UUID playerId = player.getUniqueId();
+        
+        // Verify player is a guard
+        if (!isPlayerGuard(player)) {
+            player.sendMessage(MessageUtils.getPrefix(plugin).append(
+                MessageUtils.parseMessage("<red>Token conversion is only available to guards!</red>")));
+            return false;
         }
 
-        return true;
+        // Check minimum minutes
+        int minimumMinutes = plugin.getConfig().getInt("conversion.tokens.minimum", 5);
+        if (minutes < minimumMinutes) {
+            player.sendMessage(MessageUtils.getPrefix(plugin).append(
+                MessageUtils.parseMessage("<red>Minimum conversion is " + minimumMinutes + " minutes!</red>")));
+            return false;
+        }
+
+        // Check if player has enough off-duty minutes
+        int currentMinutes = getRemainingOffDutyMinutes(playerId);
+        if (currentMinutes < minutes) {
+            player.sendMessage(MessageUtils.getPrefix(plugin).append(
+                MessageUtils.parseMessage("<red>You only have " + currentMinutes + " off-duty minutes available!</red>")));
+            return false;
+        }
+
+        // Use internal guard token system for conversion
+        boolean success = plugin.getGuardTokenManager().convertOffDutyMinutesToTokens(player, minutes);
+        
+        if (success && plugin.getConfigManager().isDebugEnabled()) {
+            plugin.getLogger().info("Converted " + minutes + " off-duty minutes to guard tokens for " + player.getName());
+        }
+        
+        return success;
+    }
+    
+    /**
+     * Check if a player is a guard (has guard permissions)
+     */
+    private boolean isPlayerGuard(Player player) {
+        return player.hasPermission("edencorrections.guard") || 
+               player.hasPermission("edencorrections.duty") ||
+               plugin.getGuardRankManager().getPlayerRank(player) != null;
     }
 
     public int getThresholdMinutes() {
@@ -980,7 +1103,7 @@ public class DutyManager {
                         ItemStack[] armor = deserializeInventory(armorString);
 
                         if (contents != null && armor != null) {
-                            savedInventories.put(playerId, new InventoryData(contents, armor));
+                            savedInventories.put(playerId, new InventoryData(contents, armor, null));
                         }
                     }
                 } catch (IllegalArgumentException e) {
@@ -991,70 +1114,80 @@ public class DutyManager {
     }
 
     private void savePlayerInventory(Player player) {
-        // Save current inventory
-        ItemStack[] contents = player.getInventory().getContents();
-        ItemStack[] armor = player.getInventory().getArmorContents();
-
-        savedInventories.put(player.getUniqueId(), new InventoryData(contents, armor));
-
-        // Save to file
-        String path = player.getUniqueId().toString();
-        inventoryConfig.set(path + ".contents", serializeInventory(contents));
-        inventoryConfig.set(path + ".armor", serializeInventory(armor));
-
-        try {
-            inventoryConfig.save(inventoryFile);
-        } catch (IOException e) {
-            plugin.getLogger().log(Level.SEVERE, "Failed to save inventory to file", e);
-        }
-
-        // Clear inventory
-        player.getInventory().clear();
-        player.getInventory().setArmorContents(new ItemStack[4]);
+        // Use config-driven version
+        savePlayerInventoryWithConfig(player);
     }
 
     private void restorePlayerInventory(Player player) {
-        // Get saved inventory
-        InventoryData data = savedInventories.remove(player.getUniqueId());
-        if (data != null) {
-            // Clear current inventory
-            player.getInventory().clear();
-
-            // Restore inventory
-            player.getInventory().setContents(data.contents);
-            player.getInventory().setArmorContents(data.armor);
-
-            // Remove from file
-            inventoryConfig.set(player.getUniqueId().toString(), null);
-            try {
-                inventoryConfig.save(inventoryFile);
-            } catch (IOException e) {
-                plugin.getLogger().log(Level.SEVERE, "Failed to update inventory file", e);
-            }
-        }
+        // Use config-driven version
+        restorePlayerInventoryWithConfig(player);
     }
 
     public void reload() {
         loadConfig();
+        
+        // Restart any active decay task
+        if (decayTask != null && !decayTask.isCancelled()) {
+            decayTask.cancel();
+        }
+        
+        // We don't restart the decay task here as decay is not currently implemented
+    }
 
-        // Reload inventory config
-        inventoryConfig = YamlConfiguration.loadConfiguration(inventoryFile);
+    /**
+     * Force a player off duty without location checks or rewards
+     * Used when a player leaves the server while on duty
+     */
+    public void forceOffDuty(Player player) {
+        UUID uuid = player.getUniqueId();
+        
+        // Clear duty status immediately
+        dutyStatus.put(uuid, false);
+        storageManager.saveDutyStatus(uuid, false);
+        
+        // Cancel any active duty timer
+        if (playerTimers.containsKey(uuid)) {
+            playerTimers.get(uuid).cancel();
+            playerTimers.remove(uuid);
+        }
+        
+        // Clear any immobilization
+        clearImmobilization(uuid);
+        
+        // Fire duty end event
+        plugin.getServer().getPluginManager().callEvent(new GuardDutyEndEvent(player));
+        
+        // End duty session
+        plugin.getGuardStatisticsManager().endDutySession(player);
+        
+        plugin.getLogger().info("Force-cleared duty status for " + player.getName());
+    }
 
-        // Reload data from storage
-        loadData();
+    /**
+     * Clear any active immobilization for a player
+     */
+    public void clearImmobilization(UUID playerId) {
+        // Remove from immobilization tracking
+        immobilizedPlayers.remove(playerId);
+        immobilizedGuards.remove(playerId);
+        lastReminderTime.remove(playerId);
+        
+        // Cancel immobilization task if active
+        if (immobilizationTasks.containsKey(playerId)) {
+            immobilizationTasks.get(playerId).cancel();
+            immobilizationTasks.remove(playerId);
+        }
+        
+        // Remove potion effects if player is online
+        Player player = Bukkit.getPlayer(playerId);
+        if (player != null && player.isOnline()) {
+            player.removePotionEffect(PotionEffectType.SLOWNESS);
+            player.removePotionEffect(PotionEffectType.JUMP_BOOST);
+        }
     }
 
     public void onDisable() {
-        // Cancel tasks
-        if (decayTask != null) {
-            decayTask.cancel();
-        }
-
-        if (timeCheckTask != null) {
-            timeCheckTask.cancel();
-        }
-
-        // Cancel all player timers
+        // Cancel timers
         for (BukkitTask task : playerTimers.values()) {
             task.cancel();
         }
@@ -1075,13 +1208,71 @@ public class DutyManager {
         saveInventories();
     }
 
+    /**
+     * Emergency killswitch - disables all duty operations
+     */
+    public static void setEmergencyShutdown(boolean shutdown) {
+        emergencyShutdown = shutdown;
+    }
+
+    /**
+     * Check if emergency shutdown is active
+     */
+    public static boolean isEmergencyShutdown() {
+        return emergencyShutdown;
+    }
+
+    // --- Inventory Caching with Config ---
+    private void savePlayerInventoryWithConfig(Player player) {
+        try {
+            boolean includeArmor = dutyConfig.inventoryCacheIncludeArmor;
+            boolean includeOffhand = dutyConfig.inventoryCacheIncludeOffhand;
+            ItemStack[] contents = player.getInventory().getContents();
+            ItemStack[] armor = includeArmor ? player.getInventory().getArmorContents() : new ItemStack[0];
+            ItemStack offhand = includeOffhand ? player.getInventory().getItemInOffHand() : null;
+            savedInventories.put(player.getUniqueId(), new InventoryData(contents, armor, offhand));
+            // Save to file
+            String path = player.getUniqueId().toString();
+            inventoryConfig.set(path + ".contents", serializeInventory(contents));
+            inventoryConfig.set(path + ".armor", serializeInventory(armor));
+            if (includeOffhand) {
+                inventoryConfig.set(path + ".offhand", serializeInventory(new ItemStack[]{offhand}));
+            }
+            inventoryConfig.save(inventoryFile);
+        } catch (Exception e) {
+            plugin.getLogger().log(Level.SEVERE, "Failed to save player inventory (config-driven)", e);
+        }
+    }
+
+    private void restorePlayerInventoryWithConfig(Player player) {
+        try {
+            InventoryData data = savedInventories.remove(player.getUniqueId());
+            if (data != null) {
+                player.getInventory().clear();
+                player.getInventory().setContents(data.contents);
+                if (dutyConfig.inventoryCacheIncludeArmor && data.armor != null) {
+                    player.getInventory().setArmorContents(data.armor);
+                }
+                if (dutyConfig.inventoryCacheIncludeOffhand && data.offhand != null) {
+                    player.getInventory().setItemInOffHand(data.offhand);
+                }
+                // Remove from file
+                inventoryConfig.set(player.getUniqueId().toString(), null);
+                inventoryConfig.save(inventoryFile);
+            }
+        } catch (Exception e) {
+            plugin.getLogger().log(Level.SEVERE, "Failed to restore player inventory (config-driven)", e);
+        }
+    }
+
     private static class InventoryData {
         private final ItemStack[] contents;
         private final ItemStack[] armor;
-
-        public InventoryData(ItemStack[] contents, ItemStack[] armor) {
+        private final ItemStack offhand;
+        public InventoryData(ItemStack[] contents, ItemStack[] armor, ItemStack offhand) {
             this.contents = contents;
             this.armor = armor;
+            this.offhand = offhand;
         }
     }
 }

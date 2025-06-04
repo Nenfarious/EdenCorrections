@@ -1,0 +1,453 @@
+# =================================
+# Eden Corrections - Guard Loot System Configuration
+# All settings for guard death loot drops
+# =================================
+
+# =================================
+# Basic Loot System Settings
+# =================================
+guard-loot:
+  # Whether the guard loot system is enabled
+  enabled: true
+  # Cooldown time between loot drops from the same player (seconds)
+  cooldown: 600
+  # Message shown when player is on loot cooldown
+  cooldown-message: "<dark_gray>[</dark_gray><dark_red><bold>𝕏</bold></dark_red><dark_gray>]</dark_gray> <aqua>{victim}</aqua> <gray>has their guard loot on cooldown! </gray><aqua>({time}s)</aqua>"
+  
+  # Token reward for killing guards
+  token-reward:
+    enabled: true
+    amount: 200
+    message: "<red>You fought bravely in combat and have received {tokens} guard tokens!</red>"
+
+# =================================
+# Modern Loot System Settings
+# =================================
+loot-system:
+  # Whether to use the modern context-aware loot system
+  use-modern-system: false
+  # Whether to enable quality tiers (common, rare, epic, legendary)
+  quality:
+    enabled: true
+
+# =================================
+# Rank-Based Loot Tables
+# =================================
+ranks:
+  # Trainee Guard Loot Table
+  trainee:
+    armor:
+      - item: LEATHER_HELMET
+        drop-chance: "30%"
+        amount: "1"
+        enchantments:
+          - "protection:1:20%"
+      - item: LEATHER_CHESTPLATE
+        drop-chance: "40%"
+        amount: "1"
+        enchantments:
+          - "protection:1:30%"
+      - item: LEATHER_LEGGINGS
+        drop-chance: "30%"
+        amount: "1"
+        enchantments:
+          - "protection:1:20%"
+      - item: LEATHER_BOOTS
+        drop-chance: "30%"
+        amount: "1"
+        enchantments:
+          - "protection:1:20%"
+    weapons:
+      - item: WOODEN_SWORD
+        drop-chance: "60%"
+        amount: "1"
+        enchantments:
+          - "sharpness:1:30%"
+      - item: BOW
+        drop-chance: "40%"
+        amount: "1"
+        enchantments:
+          - "power:1:20%"
+      - item: STONE_AXE
+        drop-chance: "30%"
+        amount: "1"
+    resources:
+      - item: ARROW
+        drop-chance: "80%"
+        amount: "8-16"
+      - item: BREAD
+        drop-chance: "60%"
+        amount: "2-5"
+      - item: TORCH
+        drop-chance: "50%"
+        amount: "4-8"
+
+  # Private Guard Loot Table
+  private:
+    armor:
+      - item: CHAINMAIL_HELMET
+        drop-chance: "40%"
+        amount: "1"
+        enchantments:
+          - "protection:2:30%"
+          - "unbreaking:1:20%"
+      - item: CHAINMAIL_CHESTPLATE
+        drop-chance: "50%"
+        amount: "1"
+        enchantments:
+          - "protection:2:40%"
+          - "unbreaking:1:30%"
+      - item: CHAINMAIL_LEGGINGS
+        drop-chance: "40%"
+        amount: "1"
+        enchantments:
+          - "protection:2:30%"
+          - "unbreaking:1:20%"
+      - item: CHAINMAIL_BOOTS
+        drop-chance: "40%"
+        amount: "1"
+        enchantments:
+          - "protection:2:30%"
+          - "feather_falling:1:30%"
+    weapons:
+      - item: IRON_SWORD
+        drop-chance: "70%"
+        amount: "1"
+        enchantments:
+          - "sharpness:2:40%"
+          - "unbreaking:1:30%"
+      - item: BOW
+        drop-chance: "50%"
+        amount: "1"
+        enchantments:
+          - "power:2:30%"
+          - "punch:1:20%"
+      - item: IRON_AXE
+        drop-chance: "40%"
+        amount: "1"
+        enchantments:
+          - "sharpness:1:30%"
+      - item: CROSSBOW
+        drop-chance: "30%"
+        amount: "1"
+        enchantments:
+          - "quick_charge:1:20%"
+    resources:
+      - item: ARROW
+        drop-chance: "90%"
+        amount: "16-32"
+      - item: COOKED_BEEF
+        drop-chance: "70%"
+        amount: "3-6"
+      - item: TORCH
+        drop-chance: "60%"
+        amount: "8-16"
+      - item: IRON_INGOT
+        drop-chance: "40%"
+        amount: "1-3"
+
+  # Officer Guard Loot Table
+  officer:
+    armor:
+      - item: IRON_HELMET
+        drop-chance: "50%"
+        amount: "1"
+        enchantments:
+          - "protection:3:40%"
+          - "unbreaking:2:30%"
+          - "respiration:1:20%"
+      - item: IRON_CHESTPLATE
+        drop-chance: "60%"
+        amount: "1"
+        enchantments:
+          - "protection:3:50%"
+          - "unbreaking:2:40%"
+          - "thorns:1:20%"
+      - item: IRON_LEGGINGS
+        drop-chance: "50%"
+        amount: "1"
+        enchantments:
+          - "protection:3:40%"
+          - "unbreaking:2:30%"
+      - item: IRON_BOOTS
+        drop-chance: "50%"
+        amount: "1"
+        enchantments:
+          - "protection:3:40%"
+          - "feather_falling:2:40%"
+          - "depth_strider:1:20%"
+    weapons:
+      - item: IRON_SWORD
+        drop-chance: "80%"
+        amount: "1"
+        enchantments:
+          - "sharpness:3:50%"
+          - "unbreaking:2:40%"
+          - "fire_aspect:1:20%"
+      - item: BOW
+        drop-chance: "60%"
+        amount: "1"
+        enchantments:
+          - "power:3:40%"
+          - "punch:1:30%"
+          - "flame:1:20%"
+      - item: DIAMOND_AXE
+        drop-chance: "30%"
+        amount: "1"
+        enchantments:
+          - "sharpness:2:40%"
+          - "efficiency:2:30%"
+      - item: CROSSBOW
+        drop-chance: "40%"
+        amount: "1"
+        enchantments:
+          - "quick_charge:2:30%"
+          - "piercing:1:20%"
+    resources:
+      - item: ARROW
+        drop-chance: "90%"
+        amount: "24-48"
+      - item: GOLDEN_APPLE
+        drop-chance: "30%"
+        amount: "1-2"
+      - item: COOKED_BEEF
+        drop-chance: "80%"
+        amount: "4-8"
+      - item: TORCH
+        drop-chance: "70%"
+        amount: "12-24"
+      - item: IRON_INGOT
+        drop-chance: "50%"
+        amount: "2-5"
+      - item: DIAMOND
+        drop-chance: "20%"
+        amount: "1-2"
+
+  # Sergeant Guard Loot Table
+  sergeant:
+    armor:
+      - item: DIAMOND_HELMET
+        drop-chance: "60%"
+        amount: "1"
+        enchantments:
+          - "protection:4:50%"
+          - "unbreaking:3:40%"
+          - "respiration:2:30%"
+      - item: DIAMOND_CHESTPLATE
+        drop-chance: "70%"
+        amount: "1"
+        enchantments:
+          - "protection:4:60%"
+          - "unbreaking:3:50%"
+          - "thorns:2:30%"
+      - item: DIAMOND_LEGGINGS
+        drop-chance: "60%"
+        amount: "1"
+        enchantments:
+          - "protection:4:50%"
+          - "unbreaking:3:40%"
+      - item: DIAMOND_BOOTS
+        drop-chance: "60%"
+        amount: "1"
+        enchantments:
+          - "protection:4:50%"
+          - "feather_falling:3:50%"
+          - "depth_strider:2:30%"
+          - "soul_speed:1:20%"
+    weapons:
+      - item: DIAMOND_SWORD
+        drop-chance: "80%"
+        amount: "1"
+        enchantments:
+          - "sharpness:4:60%"
+          - "unbreaking:3:50%"
+          - "fire_aspect:2:30%"
+          - "looting:2:20%"
+      - item: BOW
+        drop-chance: "70%"
+        amount: "1"
+        enchantments:
+          - "power:4:50%"
+          - "punch:2:40%"
+          - "flame:1:30%"
+          - "infinity:1:10%"
+      - item: TRIDENT
+        drop-chance: "20%"
+        amount: "1"
+        enchantments:
+          - "impaling:3:40%"
+          - "riptide:2:20%"
+      - item: CROSSBOW
+        drop-chance: "50%"
+        amount: "1"
+        enchantments:
+          - "quick_charge:3:40%"
+          - "piercing:2:30%"
+          - "multishot:1:20%"
+    resources:
+      - item: ARROW
+        drop-chance: "100%"
+        amount: "32-64"
+      - item: ENCHANTED_GOLDEN_APPLE
+        drop-chance: "10%"
+        amount: "1"
+      - item: GOLDEN_APPLE
+        drop-chance: "50%"
+        amount: "1-3"
+      - item: COOKED_BEEF
+        drop-chance: "90%"
+        amount: "6-12"
+      - item: TORCH
+        drop-chance: "80%"
+        amount: "16-32"
+      - item: DIAMOND
+        drop-chance: "40%"
+        amount: "2-4"
+      - item: EMERALD
+        drop-chance: "30%"
+        amount: "1-3"
+      - item: EXPERIENCE_BOTTLE
+        drop-chance: "50%"
+        amount: "5-10"
+
+  # Warden Guard Loot Table
+  warden:
+    armor:
+      - item: NETHERITE_HELMET
+        drop-chance: "40%"
+        amount: "1"
+        enchantments:
+          - "protection:4:70%"
+          - "unbreaking:3:60%"
+          - "respiration:3:40%"
+          - "mending:1:20%"
+      - item: NETHERITE_CHESTPLATE
+        drop-chance: "50%"
+        amount: "1"
+        enchantments:
+          - "protection:4:80%"
+          - "unbreaking:3:70%"
+          - "thorns:3:40%"
+          - "mending:1:30%"
+      - item: NETHERITE_LEGGINGS
+        drop-chance: "40%"
+        amount: "1"
+        enchantments:
+          - "protection:4:70%"
+          - "unbreaking:3:60%"
+          - "mending:1:20%"
+      - item: NETHERITE_BOOTS
+        drop-chance: "40%"
+        amount: "1"
+        enchantments:
+          - "protection:4:70%"
+          - "feather_falling:4:60%"
+          - "depth_strider:3:40%"
+          - "soul_speed:3:30%"
+          - "mending:1:20%"
+      - item: DIAMOND_HELMET
+        drop-chance: "60%"
+        amount: "1"
+        enchantments:
+          - "protection:4:60%"
+          - "unbreaking:3:50%"
+          - "respiration:3:40%"
+      - item: DIAMOND_CHESTPLATE
+        drop-chance: "70%"
+        amount: "1"
+        enchantments:
+          - "protection:4:70%"
+          - "unbreaking:3:60%"
+          - "thorns:2:40%"
+    weapons:
+      - item: NETHERITE_SWORD
+        drop-chance: "30%"
+        amount: "1"
+        enchantments:
+          - "sharpness:5:70%"
+          - "unbreaking:3:60%"
+          - "fire_aspect:2:40%"
+          - "looting:3:30%"
+          - "mending:1:20%"
+      - item: DIAMOND_SWORD
+        drop-chance: "60%"
+        amount: "1"
+        enchantments:
+          - "sharpness:5:60%"
+          - "unbreaking:3:50%"
+          - "fire_aspect:2:40%"
+          - "looting:3:30%"
+      - item: BOW
+        drop-chance: "80%"
+        amount: "1"
+        enchantments:
+          - "power:5:60%"
+          - "punch:2:50%"
+          - "flame:1:40%"
+          - "infinity:1:20%"
+          - "mending:1:10%"
+      - item: TRIDENT
+        drop-chance: "40%"
+        amount: "1"
+        enchantments:
+          - "impaling:5:50%"
+          - "riptide:3:30%"
+          - "loyalty:3:30%"
+          - "channeling:1:20%"
+      - item: CROSSBOW
+        drop-chance: "60%"
+        amount: "1"
+        enchantments:
+          - "quick_charge:3:50%"
+          - "piercing:4:40%"
+          - "multishot:1:30%"
+          - "unbreaking:3:40%"
+    resources:
+      - item: ARROW
+        drop-chance: "100%"
+        amount: "48-96"
+      - item: ENCHANTED_GOLDEN_APPLE
+        drop-chance: "20%"
+        amount: "1-2"
+      - item: GOLDEN_APPLE
+        drop-chance: "70%"
+        amount: "2-5"
+      - item: TOTEM_OF_UNDYING
+        drop-chance: "10%"
+        amount: "1"
+      - item: COOKED_BEEF
+        drop-chance: "100%"
+        amount: "8-16"
+      - item: TORCH
+        drop-chance: "90%"
+        amount: "24-48"
+      - item: DIAMOND
+        drop-chance: "60%"
+        amount: "3-6"
+      - item: EMERALD
+        drop-chance: "50%"
+        amount: "2-5"
+      - item: NETHERITE_SCRAP
+        drop-chance: "15%"
+        amount: "1-2"
+      - item: EXPERIENCE_BOTTLE
+        drop-chance: "70%"
+        amount: "10-20"
+      - item: ENDER_PEARL
+        drop-chance: "40%"
+        amount: "1-3"
+
+# =================================
+# Loot Generation Settings
+# =================================
+generation:
+  # Whether to drop loot naturally at death location
+  drop-naturally: true
+  # Whether to announce loot drops to nearby players
+  announce-drops: false
+  # Maximum distance for drop announcements
+  announcement-range: 50
+  # Whether to protect dropped loot from despawning
+  protect-from-despawn: true
+  # How long to protect loot (seconds)
+  protection-time: 300 

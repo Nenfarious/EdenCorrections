@@ -125,9 +125,8 @@ public class GuardBuffManager {
         if (loneGuard != null) {
             // Cancel any pending removal tasks
             UUID playerId = loneGuard.getUniqueId();
-            if (removalTasks.containsKey(playerId)) {
+            if (removalTasks.containsKey(playerId) && removalTasks.get(playerId) != null) {
                 removalTasks.get(playerId).cancel();
-                removalTasks.remove(playerId);
             }
 
             // Apply effects

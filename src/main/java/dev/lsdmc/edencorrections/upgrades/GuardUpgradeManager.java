@@ -95,10 +95,7 @@ public class GuardUpgradeManager implements Listener {
      * Add an upgrade to a player
      */
     public void addUpgrade(UUID playerId, String upgradeType) {
-        // Initialize set if needed
         playerUpgrades.computeIfAbsent(playerId, k -> new HashSet<>());
-
-        // Add upgrade
         playerUpgrades.get(playerId).add(upgradeType);
 
         // Apply upgrade to player if online
@@ -122,18 +119,16 @@ public class GuardUpgradeManager implements Listener {
      * Check if a player has a specific upgrade
      */
     public boolean hasUpgrade(UUID playerId, String upgradeType) {
-        if (!playerUpgrades.containsKey(playerId)) {
-            return false;
-        }
-
-        return playerUpgrades.get(playerId).contains(upgradeType);
+        Set<String> upgrades = playerUpgrades.get(playerId);
+        return upgrades != null && upgrades.contains(upgradeType);
     }
 
     /**
      * Get all upgrades for a player
      */
     public Set<String> getPlayerUpgrades(UUID playerId) {
-        return playerUpgrades.getOrDefault(playerId, new HashSet<>());
+        Set<String> upgrades = playerUpgrades.get(playerId);
+        return upgrades != null ? upgrades : new HashSet<>();
     }
 
     /**
@@ -141,13 +136,10 @@ public class GuardUpgradeManager implements Listener {
      */
     public void removeAllUpgrades(UUID playerId) {
         Player player = Bukkit.getPlayer(playerId);
-
-        // Remove active effects if player is online
-        if (player != null && player.isOnline()) {
-            if (playerUpgrades.containsKey(playerId)) {
-                for (String upgrade : playerUpgrades.get(playerId)) {
-                    removeUpgradeEffect(player, upgrade);
-                }
+        Set<String> upgrades = playerUpgrades.get(playerId);
+        if (player != null && player.isOnline() && upgrades != null) {
+            for (String upgrade : upgrades) {
+                removeUpgradeEffect(player, upgrade);
             }
         }
 
@@ -160,9 +152,9 @@ public class GuardUpgradeManager implements Listener {
      */
     public void applyAllUpgrades(Player player) {
         UUID playerId = player.getUniqueId();
-
-        if (playerUpgrades.containsKey(playerId)) {
-            for (String upgrade : playerUpgrades.get(playerId)) {
+        Set<String> upgrades = playerUpgrades.get(playerId);
+        if (upgrades != null) {
+            for (String upgrade : upgrades) {
                 applyUpgrade(player, upgrade);
             }
         }
