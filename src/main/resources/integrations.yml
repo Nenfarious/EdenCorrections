@@ -1,0 +1,335 @@
+# =================================
+# Eden Corrections - External Integrations Configuration
+# All settings for integrating with other plugins
+# =================================
+
+# =================================
+# ExecutableItems Integration
+# =================================
+executable-items:
+  # Whether ExecutableItems integration is enabled
+  enabled: true
+  
+  # Drug items from ExecutableItems
+  drug-items:
+    - "blaze"
+    - "blaze2"
+    - "blaze3"
+    - "blaze4"
+    - "invisibility"
+    - "invisibility2"
+    - "invisibility3"
+    - "invisibility4"
+    - "jump2"
+    - "jump3"
+    - "jump4"
+    - "magicmelon"
+    - "melon2"
+    - "melon3"
+    - "melon4"
+    - "musclemix"
+    - "muscle2"
+    - "muscle3"
+    - "muscle4"
+    - "speedpowder"
+    - "speedpowder2"
+    - "speedpowder3"
+    - "speedpowder4"
+  
+  # Contraband items from ExecutableItems
+  contraband-items:
+    - "stolen_goods"
+    - "illegal_weapon"
+    - "contraband_phone"
+    - "lock_pick"
+    - "escape_rope"
+    - "smuggled_goods"
+    - "black_market_item"
+    - "restricted_material"
+  
+  # Drug effects that indicate player is under influence
+  drug-effects:
+    - "CONFUSION"
+    - "SLOWNESS"
+    - "NAUSEA"
+    - "BLINDNESS"
+    - "WEAKNESS"
+    - "POISON"
+    - "WITHER"
+    - "LEVITATION"
+
+# =================================
+# NPC Integration (Citizens)
+# =================================
+npc:
+  # Whether NPC integration is enabled
+  enabled: false
+  
+  # Citizens NPC integration
+  citizens:
+    # Whether to use Citizens NPCs for duty management
+    enabled: false
+    # NPC names/IDs that can be used for duty toggle
+    duty-npcs:
+      - "Guard Captain"
+      - "Duty Officer"
+      - "Corrections Officer"
+    # Range for NPC interaction
+    interaction-range: 5.0
+    
+  # Custom NPC settings
+  custom:
+    # Whether to create custom NPCs
+    create-npcs: false
+    # NPC spawn locations
+    spawn-locations:
+      - world: "world"
+        x: 100
+        y: 64
+        z: 100
+        name: "Guard Captain"
+        skin: "steve"
+
+# =================================
+# LuckPerms Integration
+# =================================
+luckperms:
+  # Whether LuckPerms integration is enabled
+  enabled: true
+  
+  # Automatic permission management
+  auto-permissions:
+    # Whether to automatically add permissions based on rank
+    enabled: true
+    # Whether to remove old rank permissions on promotion
+    remove-old: true
+    
+  # Group synchronization
+  group-sync:
+    # Whether to sync guard ranks with LuckPerms groups
+    enabled: true
+    # Whether to create groups if they don't exist
+    create-missing: false
+
+# =================================
+# PlaceholderAPI Integration
+# =================================
+placeholderapi:
+  # Whether PlaceholderAPI integration is enabled
+  enabled: true
+  
+  # Available placeholders
+  placeholders:
+    # Basic placeholders
+    - "%edencorrections_duty_status%"
+    - "%edencorrections_rank%"
+    - "%edencorrections_tokens%"
+    - "%edencorrections_time_served%"
+    - "%edencorrections_off_duty_time%"
+    - "%edencorrections_wanted_level%"
+    - "%edencorrections_progression_points%"
+    
+  # Whether to register custom placeholders
+  register-custom: true
+
+# =================================
+# CMI Integration
+# =================================
+cmi:
+  # Whether CMI integration is enabled
+  enabled: true
+  
+  # Kit integration
+  kits:
+    # Whether to use CMI kits for guard equipment
+    enabled: true
+    # Kit command format
+    command-format: "cmi kit {kit} {player}"
+    
+  # Jail integration
+  jail:
+    # Whether to use CMI jail system
+    enabled: true
+    # Default jail name
+    default-jail: "default"
+    # Jail command format
+    command-format: "cmi jail {player} {jail} {time}m {reason}"
+
+# =================================
+# WorldGuard Integration
+# =================================
+worldguard:
+  # Whether WorldGuard integration is enabled
+  enabled: true
+  
+  # Region-based features
+  regions:
+    # Whether to use WorldGuard regions for duty areas
+    use-for-duty: true
+    # Whether to use regions for guard restrictions
+    use-for-restrictions: true
+    # Whether to use regions for safezones
+    use-for-safezones: true
+    
+  # Custom flags
+  custom-flags:
+    # Whether to register custom WorldGuard flags
+    enabled: false
+    # Custom flags to register
+    flags:
+      - "guard-duty-allowed"
+      - "guard-actions-allowed"
+      - "prisoner-restricted"
+
+# =================================
+# Vault Integration
+# =================================
+vault:
+  # Whether Vault integration is enabled
+  enabled: true
+  
+  # Economy integration
+  economy:
+    # Whether to integrate with economy plugins via Vault
+    enabled: false
+    # Whether guards earn money for activities
+    earn-money: false
+    # Money rewards for activities
+    rewards:
+      search: 10.0
+      apprehension: 50.0
+      duty-completion: 25.0
+      
+  # Permission integration
+  permissions:
+    # Whether to use Vault for permissions
+    enabled: true
+
+# =================================
+# DiscordSRV Integration
+# =================================
+discord:
+  # Whether Discord integration is enabled
+  enabled: false
+  
+  # Discord notifications
+  notifications:
+    # Channel for guard notifications
+    guard-channel: "guard-alerts"
+    # Whether to notify Discord of guard events
+    notify-events:
+      duty-start: true
+      duty-end: false
+      apprehensions: true
+      rank-promotions: true
+      
+  # Discord commands
+  commands:
+    # Whether to allow Discord commands
+    enabled: false
+    # Commands available from Discord
+    allowed-commands:
+      - "duty status"
+      - "guard list"
+      - "statistics"
+
+# =================================
+# Plan Integration (Analytics)
+# =================================
+plan:
+  # Whether Plan analytics integration is enabled
+  enabled: false
+  
+  # Data tracking
+  tracking:
+    # Whether to track guard statistics in Plan
+    guard-stats: true
+    # Whether to track duty time in Plan
+    duty-time: true
+    # Whether to track token earnings in Plan
+    token-earnings: true
+
+# =================================
+# HolographicDisplays Integration
+# =================================
+holographic-displays:
+  # Whether HolographicDisplays integration is enabled
+  enabled: false
+  
+  # Hologram settings
+  holograms:
+    # Guard leaderboard hologram
+    leaderboard:
+      enabled: false
+      location:
+        world: "world"
+        x: 0
+        y: 70
+        z: 0
+      lines:
+        - "&6&lTop Guards"
+        - "&7{rank}. {player} - {points} points"
+      update-interval: 300 # seconds
+      
+    # Duty status hologram
+    duty-status:
+      enabled: false
+      location:
+        world: "world"
+        x: 10
+        y: 70
+        z: 0
+      lines:
+        - "&c&lGuards on Duty"
+        - "&7{count} guards patrolling"
+      update-interval: 60 # seconds
+
+# =================================
+# TAB Integration
+# =================================
+tab:
+  # Whether TAB plugin integration is enabled
+  enabled: false
+  
+  # Tab list customization
+  tablist:
+    # Whether to show guard ranks in tab list
+    show-ranks: true
+    # Whether to show duty status in tab list
+    show-duty-status: true
+    # Format for guard names in tab
+    guard-format: "&8[&c{rank}&8] &7{player}"
+    
+  # Scoreboard integration
+  scoreboard:
+    # Whether to show guard info on scoreboard
+    enabled: false
+
+# =================================
+# Combat Integration
+# =================================
+combat:
+  # CombatLogX integration
+  combatlogx:
+    enabled: false
+    # Whether guards are immune to combat tagging
+    guard-immunity: false
+    
+  # PvP Manager integration
+  pvp-manager:
+    enabled: false
+    # Whether to track guard vs prisoner combat
+    track-combat: true
+
+# =================================
+# Integration Error Handling
+# =================================
+error-handling:
+  # Whether to gracefully handle missing plugins
+  graceful-degradation: true
+  # Whether to log integration errors
+  log-errors: true
+  # Whether to disable features if integration fails
+  disable-on-failure: false
+  # Retry attempts for failed integrations
+  retry-attempts: 3 

@@ -1,0 +1,89 @@
+# =================================
+# Eden Corrections - Main Configuration
+# Prison Guard Management System
+# Version: 2.0
+# =================================
+
+# =================================
+# Core Plugin Settings
+# =================================
+plugin:
+  version: "2.0.0"
+  check-for-updates: true
+  auto-reload-configs: true
+
+# =================================
+# Storage Configuration
+# =================================
+storage:
+  # Storage type: sqlite, mysql, yaml
+  type: sqlite
+  # How often to save data to disk (in minutes)
+  autosave-interval: 5
+
+  # MySQL configuration (if using mysql)
+  mysql:
+    host: localhost
+    port: 3306
+    database: edencorrections
+    username: root
+    password: password
+    table-prefix: ec_
+
+  # SQLite configuration (if using sqlite)
+  sqlite:
+    file: database.db
+
+# =================================
+# Debug Configuration
+# =================================
+debug:
+  # Whether to enable debug logging
+  enabled: false
+  # Log level (INFO, WARNING, SEVERE)
+  level: INFO
+  # Whether to log loot generation details
+  log-loot-generation: false
+  # Whether to log rank detection details
+  log-rank-detection: false
+
+# =================================
+# File Configuration References
+# =================================
+# The plugin will automatically load these additional config files:
+# - duty.yml          (Duty system configuration)
+# - items.yml         (Guard items and equipment)
+# - ranks.yml         (Guard ranks and progression)
+# - combat.yml        (Wanted levels, chase, jail systems)
+# - loot.yml          (Guard loot system)
+# - shop.yml          (Token system and shop)
+# - interface.yml     (GUI and messages)
+# - integrations.yml  (External plugin integrations)
+
+# =================================
+# Basic Plugin Behavior
+# =================================
+features:
+  # Enable/disable major plugin components
+  duty-system: true
+  guard-items: true
+  rank-progression: true
+  loot-system: true
+  token-shop: true
+  wanted-system: true
+  chase-system: true
+  jail-integration: true
+  guard-buffs: true
+  restrictions: true
+  gui-system: true
+
+# =================================
+# Performance Settings
+# =================================
+performance:
+  # Maximum number of async tasks to run simultaneously
+  max-async-tasks: 10
+  # How often to clean up old data (in minutes)
+  cleanup-interval: 30
+  # Whether to use caching for frequently accessed data
+  enable-caching: true 

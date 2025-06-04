@@ -1,0 +1,258 @@
+# =================================
+# Eden Corrections - Combat & Security Configuration
+# All settings for wanted levels, chase system, jail integration, and security
+# =================================
+
+# =================================
+# Wanted Level System
+# =================================
+wanted-levels:
+  # How long wanted levels last (minutes)
+  duration: 180
+  # Maximum wanted level a player can reach
+  max-level: 5
+  # Whether wanted levels decay over time
+  decay-enabled: true
+  # How often to decay wanted levels (minutes)
+  decay-interval: 30
+  
+  # Effects applied at each wanted level
+  effects:
+    1: []
+    2: []
+    3: []
+    4: []
+    5: 
+      - "SLOWNESS:1:180"
+  
+  # Messages for wanted level changes
+  messages:
+    level-increase: "<red>Your wanted level has increased to {level}!</red>"
+    level-decrease: "<green>Your wanted level has decreased to {level}.</green>"
+    level-cleared: "<green>Your wanted level has been cleared!</green>"
+
+# =================================
+# Chase System Configuration
+# =================================
+chase:
+  # Maximum distance to start a chase
+  max-start-distance: 30.0
+  # Minimum wanted level required to trigger a chase
+  min-wanted-level: 1
+  # How long chases last (seconds)
+  duration: 180
+  # Whether to show chase countdown to both players
+  show-countdown: true
+  
+  # Commands that are restricted during a chase
+  restricted-commands:
+    - "spawn"
+    - "warp"
+    - "tpa"
+    - "tpaccept"
+    - "tpdeny"
+    - "home"
+    - "sethome"
+    - "back"
+    - "rtp"
+    - "wild"
+  
+  # Regions where chases cannot start or continue
+  restricted-regions:
+    - "admin_area"
+    - "staff_zone"
+    - "spawn_protected"
+  
+  # Mines where chases are restricted
+  restricted-mines:
+    - "mine_a"
+    - "mine_b"
+    - "mine_c"
+    - "mine_free"
+  
+  # Cell areas where chases cannot occur
+  restricted-cells:
+    - "cells"
+    - "cell_block_a"
+    - "cell_block_b"
+  
+  # Teleport commands blocked during chase
+  restricted-teleport-commands:
+    - "tp"
+    - "teleport"
+    - "spawn"
+    - "warp"
+    - "home"
+  
+  # Rewards for successful chases
+  rewards:
+    guard-tokens: 300
+    off-duty-minutes: 2
+    progression-points: 50
+
+# =================================
+# Jail System Integration
+# =================================
+jail:
+  # CMI jail names for different security levels
+  low-security-jail: "jail"
+  high-security-jail: "jail2"
+  default-jail: "default"
+  
+  # Whether to broadcast jail messages to the server
+  broadcast-messages: true
+  # Whether to broadcast arrest messages
+  broadcast-arrests: true
+  
+  # Jail time for offline players (minutes)
+  offline-jail-time: 5.0
+  # Whether to use legacy keyword detection for jail commands
+  use-legacy-keyword-detection: false
+  
+  # Commands configuration
+  commands:
+    # Maximum distance for jail commands
+    max-distance: 5.0
+
+  # Jail time based on wanted level (minutes)
+  time-per-wanted-level: 2.0
+  # Minimum jail time (minutes)
+  minimum-time: 1.0
+  # Maximum jail time (minutes) 
+  maximum-time: 30.0
+
+# =================================
+# Guard Buff System
+# =================================
+guard-buffs:
+  # Whether the guard buff system is enabled
+  enabled: true
+  
+  # Lone Guard System
+  lone-guard:
+    # Whether lone guard gets special buffs
+    enabled: true
+    # Effects applied to the lone guard
+    effects:
+      - "DAMAGE_RESISTANCE:1:infinite"
+      - "REGENERATION:0:infinite"
+    # Messages for lone guard system
+    messages:
+      apply: "<dark_gray>[</dark_gray><dark_red><bold>𝕏</bold></dark_red><dark_gray>]</dark_gray> <red>You are the only guard online! You now have damage resistance!</red>"
+      remove-warning: "<dark_gray>[</dark_gray><dark_red><bold>𝕏</bold></dark_red><dark_gray>]</dark_gray> <red>Another guard has logged in! Removing effects in {seconds} seconds!</red>"
+      removed: "<dark_gray>[</dark_gray><dark_red><bold>𝕏</bold></dark_red><dark_gray>]</dark_gray> <red>Your special effects have been removed!</red>"
+    # Delay before removing lone guard effects (seconds)
+    removal-delay: 10
+
+# =================================
+# Guard Death Penalties
+# =================================
+guard-death-penalties:
+  # Whether death penalties are enabled
+  enabled: true
+  # How long guards are locked to guard areas after death (seconds)
+  lock-time: 60
+  # Regions where guards must stay after death
+  restricted-regions:
+    - "guard"
+    - "guard_area"
+    - "guard_quarters"
+  # Message shown when trying to leave restricted area
+  message: "<dark_gray>[</dark_gray><dark_red><bold>𝕏</bold></dark_red><dark_gray>]</dark_gray> <gray>You cannot leave for </gray><red>{time} seconds</red> <gray>for dying!</gray>"
+
+# =================================
+# Guard Restrictions System
+# =================================
+guard-restrictions:
+  # Whether the restriction system is enabled
+  enabled: true
+  
+  # Block breaking restrictions
+  block-breaking:
+    enabled: true
+    # Blocks/block types that guards cannot break
+    restricted-blocks:
+      - "#MINEABLE_PICKAXE"
+      - "#MINEABLE_SHOVEL" 
+      - "#MINEABLE_HOE"
+      - "#CROPS"
+      - "SUGAR_CANE"
+      - "CACTUS"
+      - "BAMBOO"
+      - "KELP"
+      - "SEAGRASS"
+      - "NETHER_WART"
+    # Blocks that are exceptions (guards can break these)
+    exceptions:
+      - "STONE_BUTTON"
+      - "LEVER"
+      - "CHEST"
+      - "TRAPPED_CHEST"
+      - "BARREL"
+      - "FURNACE"
+      - "BLAST_FURNACE"
+      - "SMOKER"
+      - "CRAFTING_TABLE"
+      - "ANVIL"
+      - "GRINDSTONE"
+      - "SMITHING_TABLE"
+    # Regions where block breaking restrictions don't apply
+    exempt-regions:
+      - "guard_lounge"
+      - "guard_quarters" 
+      - "guard_workshop"
+    # Message when trying to break restricted blocks
+    message: "<dark_gray>[</dark_gray><dark_red><bold>𝕏</bold></dark_red><dark_gray>]</dark_gray> <red>You cannot farm or mine while on duty!</red>"
+  
+  # Movement restrictions
+  movement:
+    enabled: true
+    # Regions guards cannot enter while on duty
+    restricted-regions:
+      - "mine"
+      - "farm"
+      - "arena"
+    # Message when trying to enter restricted regions
+    message: "<dark_gray>[</dark_gray><dark_red><bold>𝕏</bold></dark_red><dark_gray>]</dark_gray> <red>You cannot enter this area while on duty!</red>"
+  
+  # Command restrictions
+  commands:
+    enabled: true
+    # Commands guards cannot use while on duty
+    restricted-commands:
+      - "/sell"
+      - "/shop"
+      - "/market"
+      - "/trade"
+      - "/ah"
+      - "/auction"
+      - "/plot"
+      - "/p"
+      - "/arena"
+      - "/duel"
+    # Message when trying to use restricted commands
+    message: "<dark_gray>[</dark_gray><dark_red><bold>𝕏</bold></dark_red><dark_gray>]</dark_gray> <red>You cannot use this command while on duty!</red>"
+
+# =================================
+# Safezone Configuration
+# =================================
+safezones:
+  # Safezone mode: "require" (must be in safezone) or "prohibit" (cannot be in safezone)
+  mode: "require"
+  # Message when outside safezone (require mode)
+  outside-safezone-message: "<red>You can only use guard items inside designated safezones!</red>"
+  # Message when target is protected by safezone
+  protection-message: "<red>{target} is protected by a safezone - guard actions are disabled!</red>"
+
+# =================================
+# PvP Integration
+# =================================
+pvp:
+  # Whether to integrate with PvP systems
+  enabled: true
+  # Whether guards get combat tagging immunity
+  guard-immunity: false
+  # Whether to track guard vs prisoner combat
+  track-combat: true
+  # Whether guards can attack other guards
+  guard-vs-guard: false 
