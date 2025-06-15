@@ -35,6 +35,15 @@ public class GuiManager {
     private ConfigManager.GuiConfig guiConfig;
     private ConfigManager.MessagesConfig messagesConfig;
 
+    // Remove hardcoded constants
+    private String mainMenuTitle;
+    private String dutyMenuTitle;
+    private String statsMenuTitle;
+    private String actionsMenuTitle;
+    private String shopMenuTitle;
+    private int mainMenuSize;
+    private int subMenuSize;
+
     // GUI titles
     private static final String MAIN_MENU_TITLE = "§e§lCorrections Command Center";
     private static final String DUTY_MENU_TITLE = "§b§lDuty Management";
@@ -55,6 +64,20 @@ public class GuiManager {
         this.interfaceConfig = configManager.getInterfaceConfig();
         this.guiConfig = configManager.getGuiConfig();
         this.messagesConfig = configManager.getMessagesConfig();
+        loadConfig();
+    }
+
+    private void loadConfig() {
+        // Load GUI titles
+        mainMenuTitle = guiConfig.mainMenu.title;
+        dutyMenuTitle = guiConfig.dutyMenu.title;
+        statsMenuTitle = guiConfig.statsMenu.title;
+        actionsMenuTitle = guiConfig.actionsMenu.title;
+        shopMenuTitle = guiConfig.shopMenu.title;
+
+        // Load GUI sizes
+        mainMenuSize = guiConfig.mainMenu.size;
+        subMenuSize = guiConfig.subMenuSize;
     }
 
     /**
@@ -64,6 +87,7 @@ public class GuiManager {
         this.interfaceConfig = configManager.getInterfaceConfig();
         this.guiConfig = configManager.getGuiConfig();
         this.messagesConfig = configManager.getMessagesConfig();
+        loadConfig();
     }
 
     /**
@@ -72,30 +96,23 @@ public class GuiManager {
     public void openMainMenu(Player player) {
         GuiHolder holder = new GuiHolder(plugin, GuiHolder.GuiType.ENHANCED_MAIN);
         
-        // Use configured title and size from interface config
-        String title = "§6§lGuard Control Panel"; // Default fallback
-        int size = 54; // Default fallback
-        
-        // Try to get configured values
-        if (interfaceConfig != null) {
-            // Note: Interface config structure needs to be implemented in ConfigManager
-            title = "§6§lGuard Control Panel"; // For now, keep default
-            size = 54; // For now, keep default
-        }
+        // Use configured title and size
+        String title = guiConfig.mainMenu.title;
+        int size = guiConfig.mainMenu.size;
         
         Inventory gui = Bukkit.createInventory(holder, size, title);
         
         // Play configured open sound
-        if (guiConfig != null && guiConfig.openSound != null) {
+        if (guiConfig.openSound != null) {
             try {
                 Sound sound = Sound.valueOf(guiConfig.openSound.toUpperCase().replace("MINECRAFT:", ""));
-                player.playSound(player.getLocation(), sound, 1.0f, 1.0f);
+                player.playSound(player.getLocation(), sound, guiConfig.sounds.volume, guiConfig.sounds.pitch);
             } catch (IllegalArgumentException e) {
                 // Fallback to default sound
-                player.playSound(player.getLocation(), Sound.BLOCK_CHEST_OPEN, 1.0f, 1.0f);
+                player.playSound(player.getLocation(), Sound.BLOCK_CHEST_OPEN, guiConfig.sounds.volume, guiConfig.sounds.pitch);
             }
         } else {
-            player.playSound(player.getLocation(), Sound.BLOCK_CHEST_OPEN, 1.0f, 1.0f);
+            player.playSound(player.getLocation(), Sound.BLOCK_CHEST_OPEN, guiConfig.sounds.volume, guiConfig.sounds.pitch);
         }
 
         // Check permissions
@@ -239,7 +256,7 @@ public class GuiManager {
     public void openDutyMenu(Player player) {
         // Create inventory
         GuiHolder holder = new GuiHolder(plugin, GuiHolder.GuiType.DUTY_SELECTION);
-        Inventory gui = Bukkit.createInventory(holder, SUB_MENU_SIZE, DUTY_MENU_TITLE);
+        Inventory gui = Bukkit.createInventory(holder, guiConfig.dutyMenu.size, guiConfig.dutyMenu.title);
 
         // Fill with background
         fillBackground(gui, Material.LIGHT_BLUE_STAINED_GLASS_PANE);
@@ -340,7 +357,7 @@ public class GuiManager {
     public void openStatsMenu(Player player) {
         // Create inventory
         GuiHolder holder = new GuiHolder(plugin, GuiHolder.GuiType.STATS_VIEW);
-        Inventory gui = Bukkit.createInventory(holder, SUB_MENU_SIZE, STATS_MENU_TITLE);
+        Inventory gui = Bukkit.createInventory(holder, guiConfig.statsMenu.size, guiConfig.statsMenu.title);
 
         // Fill with background
         fillBackground(gui, Material.GREEN_STAINED_GLASS_PANE);
@@ -510,7 +527,7 @@ public class GuiManager {
     public void openActionsMenu(Player player) {
         // Create inventory
         GuiHolder holder = new GuiHolder(plugin, GuiHolder.GuiType.ACTIONS_VIEW);
-        Inventory gui = Bukkit.createInventory(holder, SUB_MENU_SIZE, ACTIONS_MENU_TITLE);
+        Inventory gui = Bukkit.createInventory(holder, guiConfig.actionsMenu.size, guiConfig.actionsMenu.title);
 
         // Fill with background
         fillBackground(gui, Material.RED_STAINED_GLASS_PANE);
@@ -600,7 +617,7 @@ public class GuiManager {
     public void openEquipmentMenu(Player player) {
         // Create inventory
         GuiHolder holder = new GuiHolder(plugin, GuiHolder.GuiType.EQUIPMENT_VIEW);
-        Inventory gui = Bukkit.createInventory(holder, SUB_MENU_SIZE, "§9§lGuard Equipment");
+        Inventory gui = Bukkit.createInventory(holder, guiConfig.subMenuSize, "§9§lGuard Equipment");
 
         // Fill with background
         fillBackground(gui, Material.BLUE_STAINED_GLASS_PANE);
@@ -692,7 +709,7 @@ public class GuiManager {
         // Create inventory using shop config
         ConfigManager.ShopConfig shopConfig = plugin.getConfigManager().getShopConfig();
         GuiHolder holder = new GuiHolder(plugin, GuiHolder.GuiType.SHOP_VIEW);
-        Inventory gui = Bukkit.createInventory(holder, shopConfig.gui.size, shopConfig.gui.title);
+        Inventory gui = Bukkit.createInventory(holder, guiConfig.shopMenu.size, guiConfig.shopMenu.title);
 
         // Fill with background
         fillBackground(gui, Material.YELLOW_STAINED_GLASS_PANE);
@@ -1240,35 +1257,14 @@ public class GuiManager {
      * Play a sound for a player
      */
     private void playSound(Player player, Sound sound) {
-        player.playSound(player.getLocation(), sound, 0.7f, 1.0f);
+        player.playSound(player.getLocation(), sound, guiConfig.sounds.volume, guiConfig.sounds.pitch);
     }
 
     /**
      * Format time in seconds to a readable string
      */
     private String formatTime(long seconds) {
-        if (seconds < 60) {
-            return seconds + "s";
-        }
-
-        long minutes = seconds / 60;
-        seconds = seconds % 60;
-
-        if (minutes < 60) {
-            return minutes + "m" + (seconds > 0 ? " " + seconds + "s" : "");
-        }
-
-        long hours = minutes / 60;
-        minutes = minutes % 60;
-
-        if (hours < 24) {
-            return hours + "h" + (minutes > 0 ? " " + minutes + "m" : "");
-        }
-
-        long days = hours / 24;
-        hours = hours % 24;
-
-        return days + "d" + (hours > 0 ? " " + hours + "h" : "");
+        return MessageUtils.formatTime(seconds, guiConfig.timeFormat);
     }
 
     /**
@@ -1282,6 +1278,7 @@ public class GuiManager {
             case "private": return Material.CHAINMAIL_CHESTPLATE;
             case "officer": return Material.IRON_CHESTPLATE;
             case "sergeant": return Material.GOLDEN_CHESTPLATE;
+            case "captain": return Material.NETHERITE_CHESTPLATE;
             case "warden": return Material.DIAMOND_CHESTPLATE;
             default: return Material.LEATHER_CHESTPLATE;
         }
@@ -1353,7 +1350,7 @@ public class GuiManager {
      */
     public void openTokensView(Player player) {
         GuiHolder holder = new GuiHolder(plugin, GuiHolder.GuiType.TOKENS_VIEW);
-        Inventory gui = Bukkit.createInventory(holder, 27, "§6§lToken Management");
+        Inventory gui = Bukkit.createInventory(holder, guiConfig.subMenuSize, guiConfig.tokensView.title);
 
         // Fill with background
         fillBackground(gui, Material.YELLOW_STAINED_GLASS_PANE);

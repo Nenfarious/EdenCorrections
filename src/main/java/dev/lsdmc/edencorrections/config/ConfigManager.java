@@ -126,12 +126,20 @@ public class ConfigManager {
                     // Try to copy from plugin resources
                     InputStream resourceStream = plugin.getResource(fileName);
                     if (resourceStream != null) {
+                        // Create parent directories if they don't exist
+                        File parent = configFile.getParentFile();
+                        if (parent != null && !parent.exists()) {
+                            parent.mkdirs();
+                        }
+                        
+                        // Copy the file
                         Files.copy(resourceStream, configFile.toPath());
                         plugin.getLogger().info("Created default configuration file: " + fileName);
+                        
+                        // Close the resource stream
+                        resourceStream.close();
                     } else {
-                        // Create empty file if resource doesn't exist
-                        configFile.createNewFile();
-                        plugin.getLogger().warning("Created empty configuration file: " + fileName + " (no default resource found)");
+                        plugin.getLogger().warning("Default configuration file not found in resources: " + fileName);
                     }
                 } catch (IOException e) {
                     plugin.getLogger().log(Level.SEVERE, "Failed to create configuration file: " + fileName, e);
@@ -227,7 +235,7 @@ public class ConfigManager {
         storageConfig.mysqlTablePrefix = config.getString("storage.mysql.table-prefix", "ec_");
 
         // SQLite Configuration
-        storageConfig.sqliteFile = config.getString("storage.sqlite.file", "database.db");
+        storageConfig.sqliteFile = config.getString("storage.sqlite.file", "corrections.db");
 
         // Debug Configuration
         debugEnabled = config.getBoolean("debug.enabled", false);
@@ -726,6 +734,24 @@ public class ConfigManager {
         guiConfig.continuingDutyMessage = config.getString("messages.continuing-duty", "<green>You're continuing your guard shift!</green>");
         guiConfig.remainingOffDutyMessage = config.getString("messages.remaining-off-duty", "<yellow>You're remaining off duty.</yellow>");
 
+        // Load menu configurations
+        loadMenuConfig(config, "gui.main-menu", guiConfig.mainMenu);
+        loadMenuConfig(config, "gui.duty-selection", guiConfig.dutyMenu);
+        loadMenuConfig(config, "gui.stats-view", guiConfig.statsMenu);
+        loadMenuConfig(config, "gui.actions-view", guiConfig.actionsMenu);
+        loadMenuConfig(config, "gui.shop-view", guiConfig.shopMenu);
+        loadMenuConfig(config, "gui.tokens-view", guiConfig.tokensView);
+        
+        // Load submenu size
+        guiConfig.subMenuSize = config.getInt("gui.sub-menu-size", 36);
+        
+        // Load sound settings
+        guiConfig.sounds.volume = (float) config.getDouble("gui.sounds.volume", 0.7);
+        guiConfig.sounds.pitch = (float) config.getDouble("gui.sounds.pitch", 1.0);
+        
+        // Load time format
+        guiConfig.timeFormat = config.getString("gui.time-format", "default");
+
         // Messages Configuration
         messagesConfig.prefix = config.getString("messages.prefix", "<gold>[Corrections]</gold> ");
         messagesConfig.noPermission = config.getString("messages.no-permission", "<red>You don't have permission to do that!</red>");
@@ -753,18 +779,90 @@ public class ConfigManager {
         messagesConfig.immobilizationCompleteBroadcast = config.getString("immobilization.complete-broadcast", "<red>ALERT: {player} is now on duty and patrolling!</red>");
     }
 
+    private void loadMenuConfig(FileConfiguration config, String path, GuiConfig.MenuConfig menuConfig) {
+        menuConfig.title = config.getString(path + ".title", "§6§lMenu");
+        menuConfig.size = config.getInt(path + ".size", 54);
+        menuConfig.updateInterval = config.getInt(path + ".update-interval", 20);
+    }
+
     /**
-     * Load integrations.yml - External plugin integrations
+     * Load integrations.yml - External plugin integration settings
      */
     private void loadIntegrationsConfig() {
         FileConfiguration config = getConfig("integrations.yml");
         if (config == null) {
-            plugin.getLogger().warning("integrations.yml not found - external integrations may not function properly");
+            plugin.getLogger().warning("integrations.yml not found, using defaults");
+            setDefaultIntegrationsConfig();
             return;
         }
 
-        // Integrations are loaded directly by their respective managers
-        // This method can be extended to load integration-specific global settings if needed
+        // Kit integration settings
+        if (config.contains("kits.enabled")) {
+            integrationsConfig.kitsEnabled = config.getBoolean("kits.enabled", true);
+        }
+        if (config.contains("kits.command-format")) {
+            integrationsConfig.kitCommandFormat = config.getString("kits.command-format", "cmi kit {kit} {player}");
+        }
+
+        // Jail integration settings
+        if (config.contains("jail.enabled")) {
+            integrationsConfig.jailEnabled = config.getBoolean("jail.enabled", true);
+        }
+        if (config.contains("jail.default-jail")) {
+            integrationsConfig.defaultJail = config.getString("jail.default-jail", "default");
+        }
+        if (config.contains("jail.command-format")) {
+            integrationsConfig.jailCommandFormat = config.getString("jail.command-format", "cmi jail {player} {jail} {time}m {reason}");
+        }
+
+        // WorldGuard integration settings
+        if (config.contains("worldguard.enabled")) {
+            integrationsConfig.worldGuardEnabled = config.getBoolean("worldguard.enabled", true);
+        }
+        if (config.contains("worldguard.region-flags")) {
+            integrationsConfig.worldGuardRegionFlags = config.getStringList("worldguard.region-flags");
+        }
+
+        // LuckPerms integration settings
+        if (config.contains("luckperms.enabled")) {
+            integrationsConfig.luckPermsEnabled = config.getBoolean("luckperms.enabled", true);
+        }
+        if (config.contains("luckperms.auto-promote")) {
+            integrationsConfig.luckPermsAutoPromote = config.getBoolean("luckperms.auto-promote", true);
+        }
+
+        // PlaceholderAPI integration settings
+        if (config.contains("placeholderapi.enabled")) {
+            integrationsConfig.placeholderApiEnabled = config.getBoolean("placeholderapi.enabled", true);
+        }
+
+        // Citizens integration settings
+        if (config.contains("citizens.enabled")) {
+            integrationsConfig.citizensEnabled = config.getBoolean("citizens.enabled", true);
+        }
+        if (config.contains("citizens.npc-interact-distance")) {
+            integrationsConfig.citizensInteractDistance = config.getDouble("citizens.npc-interact-distance", 3.0);
+        }
+
+        if (debugEnabled) {
+            plugin.getLogger().info("Loaded integrations configuration:");
+            plugin.getLogger().info("Kit command format: " + integrationsConfig.kitCommandFormat);
+            plugin.getLogger().info("Jail command format: " + integrationsConfig.jailCommandFormat);
+        }
+    }
+
+    private void setDefaultIntegrationsConfig() {
+        integrationsConfig.kitsEnabled = true;
+        integrationsConfig.kitCommandFormat = "cmi kit {kit} {player}";
+        integrationsConfig.jailEnabled = true;
+        integrationsConfig.defaultJail = "default";
+        integrationsConfig.jailCommandFormat = "cmi jail {player} {jail} {time}m {reason}";
+        integrationsConfig.worldGuardEnabled = true;
+        integrationsConfig.luckPermsEnabled = true;
+        integrationsConfig.luckPermsAutoPromote = true;
+        integrationsConfig.placeholderApiEnabled = true;
+        integrationsConfig.citizensEnabled = true;
+        integrationsConfig.citizensInteractDistance = 3.0;
     }
 
     // Default configuration methods (fallbacks)
@@ -828,6 +926,30 @@ public class ConfigManager {
         guiConfig.useEnhancedGui = true;
         guiConfig.continuingDutyMessage = "<green>You're continuing your guard shift!</green>";
         guiConfig.remainingOffDutyMessage = "<yellow>You're remaining off duty.</yellow>";
+        
+        // Set default menu configurations
+        setDefaultMenuConfig(guiConfig.mainMenu, "§6§lGuard Control Panel", 54, 20);
+        setDefaultMenuConfig(guiConfig.dutyMenu, "§c§lDuty Management", 27, 20);
+        setDefaultMenuConfig(guiConfig.statsMenu, "§b§lGuard Statistics", 45, 20);
+        setDefaultMenuConfig(guiConfig.actionsMenu, "§c§lGuard Actions", 36, 20);
+        setDefaultMenuConfig(guiConfig.shopMenu, "§6§lGuard Shop", 54, 20);
+        setDefaultMenuConfig(guiConfig.tokensView, "§6§lTokens View", 54, 20);
+        
+        // Set default submenu size
+        guiConfig.subMenuSize = 36;
+        
+        // Set default sound settings
+        guiConfig.sounds.volume = 0.7f;
+        guiConfig.sounds.pitch = 1.0f;
+        
+        // Set default time format
+        guiConfig.timeFormat = "default";
+    }
+
+    private void setDefaultMenuConfig(GuiConfig.MenuConfig menuConfig, String title, int size, int updateInterval) {
+        menuConfig.title = title;
+        menuConfig.size = size;
+        menuConfig.updateInterval = updateInterval;
     }
 
     private void setDefaultMessagesConfig() {
@@ -908,7 +1030,7 @@ public class ConfigManager {
     // Getters for new config classes
     public ItemsConfig getItemsConfig() { return itemsConfig; }
     public ShopConfig getShopConfig() { return shopConfig; }
-    public RanksConfig getRanksConfig() { return ranksConfig; }
+    public RanksConfig getRanksConfigData() { return ranksConfig; }
     public CombatConfig getCombatConfig() { return combatConfig; }
     public LootConfig getLootConfig() { return lootConfig; }
     public InterfaceConfig getInterfaceConfig() { return interfaceConfig; }
@@ -1021,6 +1143,32 @@ public class ConfigManager {
         public boolean useEnhancedGui;
         public String continuingDutyMessage;
         public String remainingOffDutyMessage;
+        
+        // Menu configurations
+        public MenuConfig mainMenu = new MenuConfig();
+        public MenuConfig dutyMenu = new MenuConfig();
+        public MenuConfig statsMenu = new MenuConfig();
+        public MenuConfig actionsMenu = new MenuConfig();
+        public MenuConfig shopMenu = new MenuConfig();
+        public MenuConfig tokensView = new MenuConfig();
+        public int subMenuSize;
+        
+        // Sound settings
+        public SoundConfig sounds = new SoundConfig();
+        
+        // Time format settings
+        public String timeFormat;
+        
+        public static class MenuConfig {
+            public String title;
+            public int size;
+            public int updateInterval;
+        }
+        
+        public static class SoundConfig {
+            public float volume = 0.7f;
+            public float pitch = 1.0f;
+        }
     }
 
     public static class MessagesConfig {
@@ -1281,6 +1429,31 @@ public class ConfigManager {
     }
 
     public static class IntegrationsConfig {
-        // To be implemented when reading integrations.yml
+        public boolean kitsEnabled;
+        public String kitCommandFormat;
+        public boolean jailEnabled;
+        public String defaultJail;
+        public String jailCommandFormat;
+        public boolean worldGuardEnabled;
+        public List<String> worldGuardRegionFlags;
+        public boolean luckPermsEnabled;
+        public boolean luckPermsAutoPromote;
+        public boolean placeholderApiEnabled;
+        public boolean citizensEnabled;
+        public double citizensInteractDistance;
+    }
+
+    /**
+     * Get the ranks.yml FileConfiguration
+     */
+    public FileConfiguration getRanksConfig() {
+        return getConfig("ranks.yml");
+    }
+
+    /**
+     * Get the duty.yml FileConfiguration  
+     */
+    public FileConfiguration getDutyConfigFile() {
+        return getConfig("duty.yml");
     }
 }

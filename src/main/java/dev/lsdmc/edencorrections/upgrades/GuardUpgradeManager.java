@@ -25,6 +25,7 @@ import java.util.UUID;
 
 public class GuardUpgradeManager implements Listener {
     private final EdenCorrections plugin;
+    private final File dataDir;
     private final File upgradesFile;
     private FileConfiguration upgradesConfig;
 
@@ -33,9 +34,11 @@ public class GuardUpgradeManager implements Listener {
 
     public GuardUpgradeManager(EdenCorrections plugin) {
         this.plugin = plugin;
-
-        // Create upgrades data file
-        upgradesFile = new File(plugin.getDataFolder(), "guard_upgrades.yml");
+        this.dataDir = new File(plugin.getDataFolder(), "data");
+        if (!dataDir.exists()) {
+            dataDir.mkdirs();
+        }
+        upgradesFile = new File(dataDir, "guard_upgrades.yml");
         if (!upgradesFile.exists()) {
             try {
                 upgradesFile.createNewFile();

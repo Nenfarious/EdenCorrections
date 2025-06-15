@@ -51,28 +51,28 @@ public class LocationManager {
     
     public LocationManager(EdenCorrections plugin) {
         this.plugin = plugin;
-        this.locationsFile = new File(plugin.getDataFolder(), "locations.yml");
-        loadConfiguration();
-    }
-    
-    private void loadConfiguration() {
+        
+        // Initialize data directory
+        File dataDir = new File(plugin.getDataFolder(), "data");
+        if (!dataDir.exists()) {
+            dataDir.mkdirs();
+        }
+        
+        this.locationsFile = new File(dataDir, "locations.yml");
+        
         if (!locationsFile.exists()) {
             try {
-                plugin.getDataFolder().mkdirs();
                 locationsFile.createNewFile();
             } catch (IOException e) {
-                plugin.getLogger().log(Level.SEVERE, "Failed to create locations.yml", e);
+                plugin.getLogger().severe("Failed to create locations.yml: " + e.getMessage());
             }
         }
         
-        locationsConfig = YamlConfiguration.loadConfiguration(locationsFile);
-        loadAllLocations();
+        this.locationsConfig = YamlConfiguration.loadConfiguration(locationsFile);
+        loadLocations();
     }
     
-    /**
-     * Load all locations from the config file into cache
-     */
-    private void loadAllLocations() {
+    private void loadLocations() {
         locationCache.clear();
         
         for (LocationType type : LocationType.values()) {
@@ -252,7 +252,7 @@ public class LocationManager {
      * Reload all locations
      */
     public void reload() {
-        loadConfiguration();
+        loadLocations();
         plugin.getLogger().info("Reloaded " + locationCache.size() + " locations");
     }
     

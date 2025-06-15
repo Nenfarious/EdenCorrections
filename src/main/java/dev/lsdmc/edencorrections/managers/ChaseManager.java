@@ -303,7 +303,7 @@ public class ChaseManager {
             // Award points for successful chase
             if (guard != null) {
                 plugin.getGuardProgressionManager().addPoints(guard,
-                    plugin.getConfig().getInt("guard-progression.rewards.chase-complete", 50),
+                    plugin.getGuardProgressionManager().getRewardAmount("chase-complete"),
                     "Successfully completed chase");
 
                 // Award off-duty time (1 minute + wanted level)

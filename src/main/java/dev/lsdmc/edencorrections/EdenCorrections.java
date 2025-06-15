@@ -50,6 +50,16 @@ import dev.lsdmc.edencorrections.storage.SQLiteStorage;
 import dev.lsdmc.edencorrections.storage.MySQLStorage;
 import dev.lsdmc.edencorrections.managers.loot.ModernLootManager;
 import dev.lsdmc.edencorrections.managers.SafezoneManager;
+import dev.lsdmc.edencorrections.managers.GuardDutyManager;
+import dev.lsdmc.edencorrections.commands.GuardCommand;
+import dev.lsdmc.edencorrections.services.GuardService;
+import dev.lsdmc.edencorrections.services.GuiService;
+import dev.lsdmc.edencorrections.services.ConfigService;
+import dev.lsdmc.edencorrections.services.WorldGuardService;
+import dev.lsdmc.edencorrections.items.Handcuffs;
+import dev.lsdmc.edencorrections.services.HandcuffService;
+import dev.lsdmc.edencorrections.services.WantedService;
+import dev.lsdmc.edencorrections.services.TokenService;
 
 public class EdenCorrections extends JavaPlugin {
     private static EdenCorrections instance;
@@ -110,13 +120,21 @@ public class EdenCorrections extends JavaPlugin {
     // Emergency killswitch
     private static volatile boolean emergencyShutdown = false;
 
+    private GuardDutyManager guardDutyManager;
+
+    private GuardService guardService;
+    private GuiService guiService;
+    private ConfigService configService;
+    private WorldGuardService worldGuardService;
+    private HandcuffService handcuffService;
+    private WantedService wantedService;
+    private TokenService tokenService;
+    private Handcuffs handcuffs;
+
     @Override
     public void onEnable() {
         instance = this;
         miniMessage = MiniMessage.miniMessage();
-
-        // Save default config
-        saveDefaultConfig();
 
         // Initialize configuration manager FIRST
         configManager = new ConfigManager(this);
@@ -189,6 +207,20 @@ public class EdenCorrections extends JavaPlugin {
         safezoneManager = new SafezoneManager(this);
         getLogger().info("SafezoneManager initialized");
 
+        // Initialize GuardDutyManager
+        guardDutyManager = new GuardDutyManager(this);
+        getLogger().info("GuardDutyManager initialized");
+
+        // Initialize services
+        this.configService = new ConfigService(this);
+        this.guardService = new GuardService(this);
+        this.guiService = new GuiService(this);
+        this.worldGuardService = new WorldGuardService(this);
+        this.handcuffs = new Handcuffs(this);
+        this.handcuffService = new HandcuffService(this);
+        this.wantedService = new WantedService(this);
+        this.tokenService = new TokenService(this);
+
         // Register commands
         BaseCommandHandler baseCommandHandler = new BaseCommandHandler(this);
         Objects.requireNonNull(getCommand("edencorrections")).setExecutor(baseCommandHandler);
@@ -216,6 +248,7 @@ public class EdenCorrections extends JavaPlugin {
         getServer().getPluginManager().registerEvents(new GuiListener(this), this);
         getServer().getPluginManager().registerEvents(new GuardListener(this), this);
         getServer().getPluginManager().registerEvents(new ChaseListener(this), this);
+        getServer().getPluginManager().registerEvents(handcuffService, this);
 
         // Register placeholders if PlaceholderAPI is present
         if (Bukkit.getPluginManager().getPlugin("PlaceholderAPI") != null) {
@@ -623,5 +656,45 @@ public class EdenCorrections extends JavaPlugin {
      */
     public static boolean isEmergencyShutdown() {
         return emergencyShutdown;
+    }
+
+    public GuardDutyManager getGuardDutyManager() {
+        return guardDutyManager;
+    }
+
+    public boolean hasExecutableItems() {
+        return externalPluginIntegration != null && externalPluginIntegration.isExecutableItemsEnabled();
+    }
+
+    public GuardService getGuardService() {
+        return guardService;
+    }
+
+    public GuiService getGuiService() {
+        return guiService;
+    }
+
+    public ConfigService getConfigService() {
+        return configService;
+    }
+
+    public WorldGuardService getWorldGuardService() {
+        return worldGuardService;
+    }
+
+    public Handcuffs getHandcuffs() {
+        return handcuffs;
+    }
+
+    public HandcuffService getHandcuffService() {
+        return handcuffService;
+    }
+
+    public WantedService getWantedService() {
+        return wantedService;
+    }
+
+    public TokenService getTokenService() {
+        return tokenService;
     }
 }

@@ -32,7 +32,7 @@ storage:
 
   # SQLite configuration (if using sqlite)
   sqlite:
-    file: database.db
+    file: corrections.db
 
 # =================================
 # Debug Configuration

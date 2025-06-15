@@ -42,30 +42,61 @@ public class MessageUtils {
     /**
      * Format a time duration in a human-readable format
      * @param seconds The time in seconds
+     * @param format The format to use (default, compact, or detailed)
      * @return The formatted time string
      */
-    public static String formatTime(int seconds) {
+    public static String formatTime(long seconds, String format) {
         if (seconds < 60) {
             return seconds + "s";
         }
 
-        int minutes = seconds / 60;
-        seconds = seconds % 60;
+        int minutes = (int) (seconds / 60);
+        seconds = (int) (seconds % 60);
 
         if (minutes < 60) {
-            return minutes + "m " + seconds + "s";
+            switch (format) {
+                case "compact":
+                    return minutes + "m";
+                case "detailed":
+                    return minutes + " minutes " + seconds + " seconds";
+                default:
+                    return minutes + "m " + seconds + "s";
+            }
         }
 
         int hours = minutes / 60;
         minutes = minutes % 60;
 
         if (hours < 24) {
-            return hours + "h " + minutes + "m";
+            switch (format) {
+                case "compact":
+                    return hours + "h";
+                case "detailed":
+                    return hours + " hours " + minutes + " minutes";
+                default:
+                    return hours + "h " + minutes + "m";
+            }
         }
 
         int days = hours / 24;
         hours = hours % 24;
 
-        return days + "d " + hours + "h";
+        switch (format) {
+            case "compact":
+                return days + "d";
+            case "detailed":
+                return days + " days " + hours + " hours";
+            default:
+                return days + "d " + hours + "h";
+        }
+    }
+
+    /**
+     * Format a time duration in a human-readable format using default format
+     * @param seconds The time in seconds
+     * @return The formatted time string
+     */
+    public static String formatTime(long seconds) {
+        return formatTime(seconds, "default");
     }
 }

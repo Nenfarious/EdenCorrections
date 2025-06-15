@@ -3,8 +3,10 @@ package dev.lsdmc.edencorrections.managers;
 import dev.lsdmc.edencorrections.EdenCorrections;
 import dev.lsdmc.edencorrections.storage.SQLiteStorage;
 import org.bukkit.entity.Player;
+import org.bukkit.configuration.file.FileConfiguration;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -12,6 +14,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public class GuardProgressionManager {
     private final EdenCorrections plugin;
     private final SQLiteStorage sqliteStorage;
+    private final GuardRankManager rankManager;
     
     // Cache for progression data
     private final Map<UUID, ProgressionData> progressionCache = new ConcurrentHashMap<>();
@@ -22,23 +25,42 @@ public class GuardProgressionManager {
     public GuardProgressionManager(EdenCorrections plugin) {
         this.plugin = plugin;
         this.sqliteStorage = (SQLiteStorage) plugin.getStorageManager();
+        this.rankManager = plugin.getGuardRankManager();
         loadRankThresholds();
     }
     
     private void loadRankThresholds() {
-        // Default thresholds if not configured
+        rankThresholds.clear();
+        
+        // Load from ranks.yml instead of main config.yml
+        FileConfiguration ranksConfig = plugin.getConfigManager().getRanksConfig();
+        if (ranksConfig == null) {
+            plugin.getLogger().warning("ranks.yml not found, using default progression thresholds");
+            setDefaultThresholds();
+            return;
+        }
+
+        // Load progression thresholds from correct path: progression.thresholds
+        if (ranksConfig.contains("progression.thresholds")) {
+            for (String rank : ranksConfig.getConfigurationSection("progression.thresholds").getKeys(false)) {
+                rankThresholds.put(rank.toLowerCase(), ranksConfig.getInt("progression.thresholds." + rank));
+            }
+        } else {
+            plugin.getLogger().warning("No progression.thresholds found in ranks.yml, using defaults");
+            setDefaultThresholds();
+        }
+
+        if (plugin.getConfigManager().isDebugEnabled()) {
+            plugin.getLogger().info("Loaded progression thresholds: " + rankThresholds);
+        }
+    }
+    
+    private void setDefaultThresholds() {
         rankThresholds.put("trainee", 0);
         rankThresholds.put("private", 1000);
         rankThresholds.put("officer", 3000);
         rankThresholds.put("sergeant", 6000);
         rankThresholds.put("warden", 10000);
-        
-        // Load from config if available
-        if (plugin.getConfig().contains("guard-progression.thresholds")) {
-            for (String rank : plugin.getConfig().getConfigurationSection("guard-progression.thresholds").getKeys(false)) {
-                rankThresholds.put(rank.toLowerCase(), plugin.getConfig().getInt("guard-progression.thresholds." + rank));
-            }
-        }
     }
     
     public void saveProgression() {
@@ -64,7 +86,7 @@ public class GuardProgressionManager {
         sqliteStorage.saveProgression(playerId, data.toMap());
         
         // Check for rank up
-        String currentRank = plugin.getGuardRankManager().getPlayerRank(player);
+        String currentRank = rankManager.getPlayerRank(player);
         String nextRank = getNextRank(currentRank);
         
         if (nextRank != null && data.points >= rankThresholds.get(nextRank)) {
@@ -106,49 +128,28 @@ public class GuardProgressionManager {
     }
     
     private String getNextRank(String currentRank) {
-        if (currentRank == null) return "trainee";
+        if (currentRank == null) return rankManager.getRankList().get(0);
         
-        switch (currentRank.toLowerCase()) {
-            case "trainee": return "private";
-            case "private": return "officer";
-            case "officer": return "sergeant";
-            case "sergeant": return "warden";
-            default: return null;
+        List<String> ranks = rankManager.getRankList();
+        int currentIndex = ranks.indexOf(currentRank.toLowerCase());
+        
+        if (currentIndex == -1 || currentIndex >= ranks.size() - 1) {
+            return null;
         }
+        
+        return ranks.get(currentIndex + 1);
     }
     
     private void promotePlayer(Player player, String newRank) {
-        // Move player to the correct LuckPerms group for the new rank
-        if (plugin.getConfig().contains("guard-rank-groups." + newRank)) {
-            String group = plugin.getConfig().getString("guard-rank-groups." + newRank);
-            try {
-                var luckPerms = net.luckperms.api.LuckPermsProvider.get();
-                var user = luckPerms.getUserManager().getUser(player.getUniqueId());
-                if (user != null) {
-                    // Remove from all other guard rank groups
-                    for (String rank : plugin.getConfig().getConfigurationSection("guard-rank-groups").getKeys(false)) {
-                        String otherGroup = plugin.getConfig().getString("guard-rank-groups." + rank);
-                        if (!otherGroup.equalsIgnoreCase(group)) {
-                            user.data().remove(net.luckperms.api.node.types.InheritanceNode.builder(otherGroup).build());
-                        }
-                    }
-                    // Add to new group
-                    user.data().add(net.luckperms.api.node.types.InheritanceNode.builder(group).build());
-                    luckPerms.getUserManager().saveUser(user);
-                }
-            } catch (Exception e) {
-                plugin.getLogger().warning("Failed to update LuckPerms group for promotion: " + e.getMessage());
-            }
+        if (rankManager.assignRank(player, newRank)) {
+            // Broadcast promotion
+            String message = "§6§lCONGRATULATIONS! §e" + player.getName() + " §7has been promoted to §e" + newRank + "§7!";
+            plugin.getServer().broadcastMessage(message);
+            // Play sound for player
+            player.playSound(player.getLocation(), org.bukkit.Sound.UI_TOAST_CHALLENGE_COMPLETE, 1.0f, 1.0f);
         } else {
-            // Fallback: use command
-            String command = "lp user " + player.getName() + " parent add " + newRank;
-            plugin.getServer().dispatchCommand(plugin.getServer().getConsoleSender(), command);
+            plugin.getLogger().warning("Failed to promote player " + player.getName() + " to rank " + newRank);
         }
-        // Broadcast promotion
-        String message = "§6§lCONGRATULATIONS! §e" + player.getName() + " §7has been promoted to §e" + newRank + "§7!";
-        plugin.getServer().broadcastMessage(message);
-        // Play sound for player
-        player.playSound(player.getLocation(), org.bukkit.Sound.UI_TOAST_CHALLENGE_COMPLETE, 1.0f, 1.0f);
     }
     
     public Map<String, Object> getProgressionStats(Player player) {
@@ -160,7 +161,7 @@ public class GuardProgressionManager {
         stats.put("arrests", data.successfulArrests);
         stats.put("contraband", data.contraband);
         
-        String currentRank = plugin.getGuardRankManager().getPlayerRank(player);
+        String currentRank = rankManager.getPlayerRank(player);
         stats.put("current_rank", currentRank);
         
         String nextRank = getNextRank(currentRank);
@@ -178,6 +179,7 @@ public class GuardProgressionManager {
         long totalTimeServed = 0;
         int successfulArrests = 0;
         int contraband = 0;
+        
         Map<String, Object> toMap() {
             Map<String, Object> map = new HashMap<>();
             map.put("points", points);
@@ -206,5 +208,30 @@ public class GuardProgressionManager {
         loadRankThresholds();
         
         plugin.getLogger().info("GuardProgressionManager reloaded - cleared cache and reloaded rank thresholds");
+    }
+
+    /**
+     * Get progression reward amount for a specific activity
+     */
+    public int getRewardAmount(String activity) {
+        FileConfiguration ranksConfig = plugin.getConfigManager().getRanksConfig();
+        if (ranksConfig != null) {
+            return ranksConfig.getInt("progression.rewards." + activity, getDefaultReward(activity));
+        }
+        return getDefaultReward(activity);
+    }
+
+    private int getDefaultReward(String activity) {
+        return switch (activity) {
+            case "search" -> 10;
+            case "successful-search" -> 25;
+            case "metal-detect" -> 15;
+            case "apprehension" -> 50;
+            case "chase-complete" -> 50;
+            case "contraband-found" -> 30;
+            case "drug-detection" -> 20;
+            case "wanted-level-increase" -> 15;
+            default -> 5;
+        };
     }
 } 

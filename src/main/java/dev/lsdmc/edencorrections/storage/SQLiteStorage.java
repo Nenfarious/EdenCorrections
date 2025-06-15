@@ -25,24 +25,32 @@ public class SQLiteStorage implements StorageManager {
     private final String dbFile;
     private final Object connectionLock = new Object();
     private volatile boolean isInitializing = false;
+    private volatile boolean isShuttingDown = false;
 
     public SQLiteStorage(EdenCorrections plugin) {
         this.plugin = plugin;
-        this.dbFile = plugin.getConfig().getString("storage.sqlite.file", "database.db");
+        // Use config value for database filename, defaulting to corrections.db
+        String configuredName = plugin.getConfig().getString("storage.sqlite.file", "corrections.db");
+        this.dbFile = configuredName.endsWith(".db") ? configuredName : configuredName + ".db";
     }
 
     @Override
     public void initialize() {
+        if (isInitializing) {
+            return;
+        }
+
         synchronized (connectionLock) {
             if (isInitializing) {
-                return; // Prevent multiple simultaneous initializations
+                return;
             }
             isInitializing = true;
-            
+
             try {
-                // Create data folder if it doesn't exist
-                if (!plugin.getDataFolder().exists()) {
-                    plugin.getDataFolder().mkdirs();
+                // Create data directory if it doesn't exist
+                File dataDir = new File(plugin.getDataFolder(), "data");
+                if (!dataDir.exists()) {
+                    dataDir.mkdirs();
                 }
 
                 // Close existing connection if any
@@ -50,123 +58,98 @@ public class SQLiteStorage implements StorageManager {
                     dataSource.close();
                 }
 
-                // Initialize connection pool
+                // Configure HikariCP
                 HikariConfig config = new HikariConfig();
-                config.setJdbcUrl("jdbc:sqlite:" + new File(plugin.getDataFolder(), dbFile).getAbsolutePath());
-                config.setConnectionTestQuery("SELECT 1");
-                config.setPoolName("EdenCorrections-SQLite");
-                config.setMaximumPoolSize(10);
-                config.setMaxLifetime(600000); // 10 minutes
-                config.setIdleTimeout(300000); // 5 minutes
-                config.setConnectionTimeout(10000); // 10 seconds
-
-                // Set driver
+                config.setJdbcUrl("jdbc:sqlite:" + dataDir + File.separator + dbFile);
                 config.setDriverClassName("org.sqlite.JDBC");
+                config.setMaximumPoolSize(10);
+                config.setMinimumIdle(2);
+                config.setIdleTimeout(300000); // 5 minutes
+                config.setConnectionTimeout(30000); // 30 seconds
+                config.setMaxLifetime(1800000); // 30 minutes
+                config.setLeakDetectionThreshold(60000); // 1 minute
 
-                // Additional SQLite-specific settings
-                config.addDataSourceProperty("journal_mode", "WAL");
-                config.addDataSourceProperty("synchronous", "NORMAL");
-                config.addDataSourceProperty("cache_size", "10000");
-                config.addDataSourceProperty("foreign_keys", "true");
+                            // Create new connection pool
+            dataSource = new HikariDataSource(config);
 
-                // Create data source
-                dataSource = new HikariDataSource(config);
+            // Initialize tables
+            createTables();
 
-                // Create tables
-                createTables();
-
-                plugin.getLogger().info("SQLite connection established successfully");
+            plugin.getLogger().info("SQLiteStorage initialized successfully");
             } catch (Exception e) {
-                plugin.getLogger().log(Level.SEVERE, "Failed to initialize SQLite connection", e);
+                plugin.getLogger().log(Level.SEVERE, "Failed to initialize SQLiteStorage", e);
+                if (dataSource != null) {
+                    dataSource.close();
+                    dataSource = null;
+                }
             } finally {
                 isInitializing = false;
             }
         }
     }
 
-    /**
-     * Get a database connection with automatic recovery for moved database errors
-     */
-    private Connection getConnection() throws SQLException {
-        try {
-            if (dataSource == null || dataSource.isClosed()) {
-                reinitializeDatabase();
+    @Override
+    public void shutdown() {
+        if (isShuttingDown) {
+            return;
+        }
+
+        synchronized (connectionLock) {
+            if (isShuttingDown) {
+                return;
             }
+            isShuttingDown = true;
+
+            try {
+                // Save any pending data
+                saveAll();
+
+                // Close connection pool
+                if (dataSource != null && !dataSource.isClosed()) {
+                    dataSource.close();
+                    dataSource = null;
+                }
+
+                plugin.getLogger().info("SQLiteStorage shutdown successfully");
+            } catch (Exception e) {
+                plugin.getLogger().log(Level.SEVERE, "Error during SQLiteStorage shutdown", e);
+            } finally {
+                isShuttingDown = false;
+            }
+        }
+    }
+
+    @Override
+    public void reload() {
+        shutdown();
+        initialize();
+    }
+
+    // Helper method to get a connection with proper error handling
+    private Connection getConnection() throws SQLException {
+        if (dataSource == null || dataSource.isClosed()) {
+            throw new SQLException("Database connection pool is not initialized or closed");
+        }
+
+        try {
             return dataSource.getConnection();
         } catch (SQLException e) {
-            // Check if this is the specific "database moved" error
-            if (isDatabaseMovedError(e)) {
-                plugin.getLogger().warning("Database file has been moved, reinitializing connection...");
-                reinitializeDatabase();
-                return dataSource.getConnection(); // Try again with new connection
-            }
-            throw e; // Re-throw other SQL exceptions
+            plugin.getLogger().log(Level.SEVERE, "Failed to get database connection", e);
+            throw e;
         }
     }
 
-    /**
-     * Check if the SQLException indicates the database file was moved
-     */
-    private boolean isDatabaseMovedError(SQLException e) {
-        return e.getMessage() != null && 
-               (e.getMessage().contains("SQLITE_READONLY_DBMOVED") ||
-                e.getMessage().contains("database file has been moved") ||
-                e.getMessage().contains("attempt to write a readonly database"));
-    }
-
-    /**
-     * Reinitialize the database connection pool
-     */
-    private void reinitializeDatabase() {
-        synchronized (connectionLock) {
-            if (isInitializing) {
-                return; // Another thread is already reinitializing
-            }
-            
-            plugin.getLogger().info("Reinitializing database connection due to connection error...");
-            initialize(); // This will close old connections and create new ones
-        }
-    }
-
-    /**
-     * Execute a database operation with automatic retry on connection errors
-     */
-    private <T> T executeWithRetry(DatabaseOperation<T> operation) {
-        int maxRetries = 2;
-        SQLException lastException = null;
-        
-        for (int attempt = 0; attempt < maxRetries; attempt++) {
-            try {
-                return operation.execute();
-            } catch (SQLException e) {
-                lastException = e;
-                
-                if (isDatabaseMovedError(e) && attempt < maxRetries - 1) {
-                    plugin.getLogger().warning("Database operation failed (attempt " + (attempt + 1) + "), retrying with fresh connection...");
-                    reinitializeDatabase();
-                    try {
-                        Thread.sleep(100); // Brief pause before retry
-                    } catch (InterruptedException ie) {
-                        Thread.currentThread().interrupt();
-                        break;
-                    }
-                } else {
-                    break; // Don't retry for other types of errors or if we've exhausted retries
+    // Helper method to close resources safely
+    private void closeResources(AutoCloseable... resources) {
+        for (AutoCloseable resource : resources) {
+            if (resource != null) {
+                try {
+                    resource.close();
+                } catch (Exception e) {
+                    plugin.getLogger().log(Level.WARNING, "Error closing resource", e);
                 }
             }
         }
-        
-        // If we get here, all retries failed
-        plugin.getLogger().log(Level.SEVERE, "Database operation failed after " + maxRetries + " attempts", lastException);
-        return null; // Return null for failed operations (methods should handle this)
-    }
-
-    /**
-     * Functional interface for database operations
-     */
-    @FunctionalInterface
-    private interface DatabaseOperation<T> {
-        T execute() throws SQLException;
     }
 
     private void createTables() {
@@ -280,24 +263,6 @@ public class SQLiteStorage implements StorageManager {
 
         } catch (SQLException e) {
             plugin.getLogger().log(Level.SEVERE, "Failed to create tables", e);
-        }
-    }
-
-    @Override
-    public void reload() {
-        // Close existing connection
-        shutdown();
-
-        // Reinitialize
-        initialize();
-    }
-
-    @Override
-    public void shutdown() {
-        synchronized (connectionLock) {
-            if (dataSource != null && !dataSource.isClosed()) {
-                dataSource.close();
-            }
         }
     }
 
@@ -1011,5 +976,76 @@ public class SQLiteStorage implements StorageManager {
         } catch (SQLException e) {
             plugin.getLogger().log(Level.SEVERE, "Failed to save wanted levels", e);
         }
+    }
+
+    private void initializeTables() throws SQLException {
+        try (Connection conn = getConnection();
+             Statement stmt = conn.createStatement()) {
+            
+            // Create tables if they don't exist
+            stmt.execute("""
+                CREATE TABLE IF NOT EXISTS players (
+                    uuid VARCHAR(36) PRIMARY KEY,
+                    name VARCHAR(16) NOT NULL,
+                    duty_status BOOLEAN DEFAULT FALSE,
+                    duty_start_time BIGINT,
+                    off_duty_minutes INTEGER DEFAULT 0,
+                    last_activity BIGINT
+                )
+            """);
+
+            stmt.execute("""
+                CREATE TABLE IF NOT EXISTS wanted_levels (
+                    uuid VARCHAR(36) PRIMARY KEY,
+                    level INTEGER DEFAULT 0,
+                    last_updated BIGINT,
+                    FOREIGN KEY (uuid) REFERENCES players(uuid)
+                )
+            """);
+
+            stmt.execute("""
+                CREATE TABLE IF NOT EXISTS guard_stats (
+                    uuid VARCHAR(36) PRIMARY KEY,
+                    arrests INTEGER DEFAULT 0,
+                    tickets INTEGER DEFAULT 0,
+                    FOREIGN KEY (uuid) REFERENCES players(uuid)
+                )
+            """);
+        }
+    }
+
+    private void saveAll() {
+        // This method is called during shutdown to ensure all data is saved
+        // The actual saving is handled by the DataManager's autosave mechanism
+        plugin.getLogger().info("Saving all pending data before shutdown...");
+    }
+
+    @FunctionalInterface
+    private interface DatabaseOperation<T> {
+        T execute() throws SQLException;
+    }
+
+    private <T> T executeWithRetry(DatabaseOperation<T> operation) {
+        int maxRetries = 3;
+        int retryDelay = 100; // milliseconds
+        
+        for (int attempt = 0; attempt < maxRetries; attempt++) {
+            try {
+                return operation.execute();
+            } catch (SQLException e) {
+                if (attempt < maxRetries - 1) {
+                    plugin.getLogger().warning("Database operation failed (attempt " + (attempt + 1) + "), retrying...");
+                    try {
+                        Thread.sleep(retryDelay * (attempt + 1)); // Exponential backoff
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                        throw new RuntimeException("Operation interrupted", ie);
+                    }
+                    continue;
+                }
+                throw new RuntimeException("Database operation failed after " + maxRetries + " attempts", e);
+            }
+        }
+        throw new RuntimeException("Database operation failed after " + maxRetries + " attempts");
     }
 }

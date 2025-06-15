@@ -8,34 +8,60 @@
 # =================================
 gui:
   # Whether to show GUI on player join
-  show-on-join: false
+  show-on-join: true
   # Delay before showing join GUI (ticks)
-  join-delay: 20
+  join-delay: 3
   # Sound played when opening GUIs
-  open-sound: minecraft:block.chest.open
+  open-sound: "BLOCK_CHEST_OPEN"
   # Whether to use the enhanced GUI system
   use-enhanced-gui: true
   
+  # Default submenu size
+  sub-menu-size: 36
+  
+  # Sound settings
+  sounds:
+    volume: 0.7
+    pitch: 1.0
+  
+  # Time format (default, compact, or detailed)
+  time-format: "default"
+  
   # Main menu GUI settings
   main-menu:
-    title: "§6§lGuard Control Panel"
+    title: "§c§lGuard Menu"
     size: 54
     update-interval: 20 # ticks
     
   # Duty selection GUI
   duty-selection:
-    title: "§c§lDuty Management"
-    size: 27
+    title: "§c§lDuty Selection"
+    size: 36
+    update-interval: 20
     
   # Statistics GUI
   stats-view:
-    title: "§b§lGuard Statistics"
-    size: 45
+    title: "§c§lGuard Statistics"
+    size: 54
+    update-interval: 20
+    
+  # Actions GUI
+  actions-view:
+    title: "§c§lGuard Actions"
+    size: 36
+    update-interval: 20
+    
+  # Shop GUI
+  shop-view:
+    title: "§6§lGuard Shop"
+    size: 54
+    update-interval: 20
     
   # Token management GUI
   tokens-view:
-    title: "§6§lToken Management"
-    size: 36
+    title: "§6§lTokens View"
+    size: 54
+    update-interval: 20
 
 # =================================
 # Core Plugin Messages
@@ -45,15 +71,15 @@ messages:
   prefix: "<gold>[Corrections]</gold> "
   
   # Permission and access messages
-  no-permission: "<dark_gray>[</dark_gray><dark_red><bold>𝕏</bold></dark_red><dark_gray>]</dark_gray> <red>You don't have permission to do that!</red>"
-  not-in-region: "<dark_gray>[</dark_gray><dark_red><bold>𝕏</bold></dark_red><dark_gray>]</dark_gray> <red>You must be in the duty room to go on/off duty!</red>"
-  not-in-area: "<dark_gray>[</dark_gray><dark_red><bold>𝕏</bold></dark_red><dark_gray>]</dark_gray> <red>You must be in a designated duty area to go on/off duty!</red>"
+  no-permission: "<red>You don't have permission to do that!</red>"
+  not-in-region: "<red>You must be in the duty room to go on/off duty!</red>"
+  not-in-area: "<red>You must be in a designated duty area to go on/off duty!</red>"
   
   # Duty status messages
-  already-on-duty: "<dark_gray>[</dark_gray><dark_red><bold>𝕏</bold></dark_red><dark_gray>]</dark_gray> <red>You are already on duty!</red>"
-  already-off-duty: "<dark_gray>[</dark_gray><dark_red><bold>𝕏</bold></dark_red><dark_gray>]</dark_gray> <red>You are already off duty!</red>"
-  on-duty: "<dark_gray>[</dark_gray><dark_red><bold>𝕏</bold></dark_red><dark_gray>]</dark_gray> <green>You are now on guard duty!</green>"
-  off-duty: "<dark_gray>[</dark_gray><dark_red><bold>𝕏</bold></dark_red><dark_gray>]</dark_gray> <yellow>You are now off duty.</yellow>"
+  already-on-duty: "<red>You are already on duty!</red>"
+  already-off-duty: "<red>You are already off duty!</red>"
+  on-duty: "<green>You are now on guard duty!</green>"
+  off-duty: "<yellow>You are now off duty.</yellow>"
   
   # Off-duty time messages
   off-duty-reward: "<dark_gray>[</dark_gray><dark_red><bold>𝕏</bold></dark_red><dark_gray>]</dark_gray> <green>You've earned {minutes} minutes of off-duty time!</green>"

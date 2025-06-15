@@ -27,6 +27,7 @@ import java.time.LocalDateTime;
 
 public class GuardTokenManager {
     private final EdenCorrections plugin;
+    private final File dataDir;
     private final File tokenFile;
     private FileConfiguration tokenConfig;
     private final ConfigManager configManager;
@@ -45,7 +46,11 @@ public class GuardTokenManager {
     
     public GuardTokenManager(EdenCorrections plugin) {
         this.plugin = plugin;
-        this.tokenFile = new File(plugin.getDataFolder(), "guard_tokens.yml");
+        this.dataDir = new File(plugin.getDataFolder(), "data");
+        if (!dataDir.exists()) {
+            dataDir.mkdirs();
+        }
+        this.tokenFile = new File(dataDir, "guard_tokens.yml");
         this.configManager = plugin.getConfigManager();
         this.shopConfig = configManager.getShopConfig();
         

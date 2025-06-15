@@ -51,7 +51,7 @@ public class GuardManager {
     // Guard progression
     private final Map<UUID, Integer> guardPoints = new ConcurrentHashMap<>();
     private final Map<UUID, String> guardRanks = new ConcurrentHashMap<>();
-    private static final String[] RANK_HIERARCHY = {"trainee", "private", "officer", "sergeant", "warden"};
+    private static final String[] RANK_HIERARCHY = {"trainee", "private", "officer", "sergeant", "captain", "warden"};
 
     // Guard statistics
     private final Map<UUID, Map<String, Integer>> guardStats = new ConcurrentHashMap<>();
@@ -298,6 +298,7 @@ public class GuardManager {
             case "private" -> 1000;
             case "officer" -> 3000;
             case "sergeant" -> 6000;
+            case "captain" -> 8000;
             case "warden" -> 10000;
             default -> Integer.MAX_VALUE;
         };

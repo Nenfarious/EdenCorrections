@@ -23,13 +23,14 @@ public class YamlStorage implements StorageManager {
 
     @Override
     public void initialize() {
-        // Create data folder if it doesn't exist
-        if (!plugin.getDataFolder().exists()) {
-            plugin.getDataFolder().mkdirs();
+        // Create data directory if it doesn't exist
+        File dataDir = new File(plugin.getDataFolder(), "data");
+        if (!dataDir.exists()) {
+            dataDir.mkdirs();
         }
 
         // Initialize duty file
-        dutyFile = new File(plugin.getDataFolder(), "duty_data.yml");
+        dutyFile = new File(dataDir, "duty_data.yml");
         if (!dutyFile.exists()) {
             try {
                 dutyFile.createNewFile();
@@ -157,29 +158,82 @@ public class YamlStorage implements StorageManager {
         return offDutyMinutes;
     }
 
-    // Activity tracking methods (not supported in YamlStorage yet)
+    // Activity tracking methods
     @Override
-    public int getSearchCount(UUID playerId) { throw new UnsupportedOperationException("Activity tracking not supported in YamlStorage yet"); }
+    public int getSearchCount(UUID playerId) {
+        return dutyConfig.getInt("activity_stats." + playerId.toString() + ".search_count", 0);
+    }
+
     @Override
-    public void incrementSearchCount(UUID playerId) { throw new UnsupportedOperationException("Activity tracking not supported in YamlStorage yet"); }
+    public void incrementSearchCount(UUID playerId) {
+        String path = "activity_stats." + playerId.toString() + ".search_count";
+        int currentCount = dutyConfig.getInt(path, 0);
+        dutyConfig.set(path, currentCount + 1);
+        saveConfig();
+    }
+
     @Override
-    public int getSuccessfulSearchCount(UUID playerId) { throw new UnsupportedOperationException("Activity tracking not supported in YamlStorage yet"); }
+    public int getSuccessfulSearchCount(UUID playerId) {
+        return dutyConfig.getInt("activity_stats." + playerId.toString() + ".successful_search_count", 0);
+    }
+
     @Override
-    public void incrementSuccessfulSearchCount(UUID playerId) { throw new UnsupportedOperationException("Activity tracking not supported in YamlStorage yet"); }
+    public void incrementSuccessfulSearchCount(UUID playerId) {
+        String path = "activity_stats." + playerId.toString() + ".successful_search_count";
+        int currentCount = dutyConfig.getInt(path, 0);
+        dutyConfig.set(path, currentCount + 1);
+        saveConfig();
+    }
+
     @Override
-    public int getKillCount(UUID playerId) { throw new UnsupportedOperationException("Activity tracking not supported in YamlStorage yet"); }
+    public int getKillCount(UUID playerId) {
+        return dutyConfig.getInt("activity_stats." + playerId.toString() + ".kill_count", 0);
+    }
+
     @Override
-    public void incrementKillCount(UUID playerId) { throw new UnsupportedOperationException("Activity tracking not supported in YamlStorage yet"); }
+    public void incrementKillCount(UUID playerId) {
+        String path = "activity_stats." + playerId.toString() + ".kill_count";
+        int currentCount = dutyConfig.getInt(path, 0);
+        dutyConfig.set(path, currentCount + 1);
+        saveConfig();
+    }
+
     @Override
-    public int getMetalDetectCount(UUID playerId) { throw new UnsupportedOperationException("Activity tracking not supported in YamlStorage yet"); }
+    public int getMetalDetectCount(UUID playerId) {
+        return dutyConfig.getInt("activity_stats." + playerId.toString() + ".metal_detect_count", 0);
+    }
+
     @Override
-    public void incrementMetalDetectCount(UUID playerId) { throw new UnsupportedOperationException("Activity tracking not supported in YamlStorage yet"); }
+    public void incrementMetalDetectCount(UUID playerId) {
+        String path = "activity_stats." + playerId.toString() + ".metal_detect_count";
+        int currentCount = dutyConfig.getInt(path, 0);
+        dutyConfig.set(path, currentCount + 1);
+        saveConfig();
+    }
+
     @Override
-    public int getApprehensionCount(UUID playerId) { throw new UnsupportedOperationException("Activity tracking not supported in YamlStorage yet"); }
+    public int getApprehensionCount(UUID playerId) {
+        return dutyConfig.getInt("activity_stats." + playerId.toString() + ".apprehension_count", 0);
+    }
+
     @Override
-    public void incrementApprehensionCount(UUID playerId) { throw new UnsupportedOperationException("Activity tracking not supported in YamlStorage yet"); }
+    public void incrementApprehensionCount(UUID playerId) {
+        String path = "activity_stats." + playerId.toString() + ".apprehension_count";
+        int currentCount = dutyConfig.getInt(path, 0);
+        dutyConfig.set(path, currentCount + 1);
+        saveConfig();
+    }
+
     @Override
-    public void resetActivityCounts(UUID playerId) { throw new UnsupportedOperationException("Activity tracking not supported in YamlStorage yet"); }
+    public void resetActivityCounts(UUID playerId) {
+        String basePath = "activity_stats." + playerId.toString();
+        dutyConfig.set(basePath + ".search_count", 0);
+        dutyConfig.set(basePath + ".successful_search_count", 0);
+        dutyConfig.set(basePath + ".kill_count", 0);
+        dutyConfig.set(basePath + ".metal_detect_count", 0);
+        dutyConfig.set(basePath + ".apprehension_count", 0);
+        saveConfig();
+    }
 
     private void saveConfig() {
         try {

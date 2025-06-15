@@ -1215,11 +1215,19 @@ public class GuardItemManager {
                 player.getInventory().addItem(createSpyglass());
                 player.getInventory().addItem(createGuardBaton());
                 break;
+            case "captain":
+                player.getInventory().addItem(createDrugSniffer());
+                player.getInventory().addItem(createMetalDetector());
+                player.getInventory().addItem(createSpyglass());
+                player.getInventory().addItem(createGuardBaton());
+                player.getInventory().addItem(createTaser());
+                break;
             case "warden":
                 player.getInventory().addItem(createDrugSniffer());
                 player.getInventory().addItem(createMetalDetector());
                 player.getInventory().addItem(createSpyglass());
                 player.getInventory().addItem(createGuardBaton());
+                player.getInventory().addItem(createTaser());
                 player.getInventory().addItem(createPrisonRemote());
                 break;
         }

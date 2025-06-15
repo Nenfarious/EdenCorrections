@@ -28,7 +28,14 @@ public class GuardStatisticsManager {
 
     public GuardStatisticsManager(EdenCorrections plugin) {
         this.plugin = plugin;
-        this.statsFile = new File(plugin.getDataFolder(), "guard_statistics.yml");
+        
+        // Initialize data directory
+        File dataDir = new File(plugin.getDataFolder(), "data");
+        if (!dataDir.exists()) {
+            dataDir.mkdirs();
+        }
+        
+        this.statsFile = new File(dataDir, "guard_statistics.yml");
         
         // Safety check for storage manager
         StorageManager storageManager = plugin.getStorageManager();
@@ -56,7 +63,6 @@ public class GuardStatisticsManager {
     private void initFileConfig() {
         if (!statsFile.exists()) {
             try {
-                plugin.getDataFolder().mkdirs();
                 statsFile.createNewFile();
             } catch (IOException e) {
                 plugin.getLogger().severe("Failed to create guard_statistics.yml: " + e.getMessage());

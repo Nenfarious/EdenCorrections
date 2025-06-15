@@ -2,6 +2,7 @@ package dev.lsdmc.edencorrections.commands.admin;
 
 import dev.lsdmc.edencorrections.EdenCorrections;
 import dev.lsdmc.edencorrections.managers.ContrabandManager;
+import dev.lsdmc.edencorrections.managers.GuardRankManager;
 import dev.lsdmc.edencorrections.utils.MessageUtils;
 import dev.lsdmc.edencorrections.utils.CommandUtils;
 import org.bukkit.Bukkit;
@@ -85,6 +86,7 @@ public class AdminCommandHandler {
             case "setplayerrank" -> handleSetPlayerRankCommand(sender, args);
             case "removeplayerrank" -> handleRemovePlayerRankCommand(sender, args);
             case "listranks" -> handleListRanksCommand(sender);
+            case "moverank" -> handleMoveRankCommand(sender, args);
             default -> {
                 return false;
             }
@@ -923,6 +925,43 @@ public class AdminCommandHandler {
         sender.sendMessage(MessageUtils.parseMessage("<green>Assigned LuckPerms group <yellow>" + groupName + "</yellow> to guard rank <yellow>" + rank + "</yellow> and added required permissions.</green>"));
     }
 
+    private void handleMoveRankCommand(CommandSender sender, String[] args) {
+        if (args.length < 3) {
+            sender.sendMessage(MessageUtils.parseMessage("<red>Usage: /cor moverank <rank> <up|down|position></red>"));
+            return;
+        }
+
+        String rank = args[1].toLowerCase();
+        String direction = args[2].toLowerCase();
+        GuardRankManager rankManager = plugin.getGuardRankManager();
+
+        if (!rankManager.isValidRank(rank)) {
+            sender.sendMessage(MessageUtils.parseMessage("<red>Invalid rank: " + rank + "</red>"));
+            return;
+        }
+
+        boolean success;
+        if (direction.equals("up")) {
+            success = rankManager.moveRankUp(rank);
+        } else if (direction.equals("down")) {
+            success = rankManager.moveRankDown(rank);
+        } else {
+            try {
+                int position = Integer.parseInt(direction);
+                success = rankManager.setRankPosition(rank, position);
+            } catch (NumberFormatException e) {
+                sender.sendMessage(MessageUtils.parseMessage("<red>Invalid position. Use 'up', 'down', or a number.</red>"));
+                return;
+            }
+        }
+
+        if (success) {
+            sender.sendMessage(MessageUtils.parseMessage("<green>Successfully moved rank " + rank + " " + direction + "</green>"));
+        } else {
+            sender.sendMessage(MessageUtils.parseMessage("<red>Failed to move rank " + rank + "</red>"));
+        }
+    }
+
     private void handleListGuardRanksCommand(CommandSender sender) {
         if (!plugin.getConfig().contains("guard-rank-groups")) {
             sender.sendMessage(MessageUtils.parseMessage("<red>No guard rank group mappings found.</red>"));
@@ -1032,10 +1071,17 @@ public class AdminCommandHandler {
     }
 
     private void handleListRanksCommand(CommandSender sender) {
-        sender.sendMessage(MessageUtils.parseMessage("<gold><bold>Guard Ranks:</bold></gold>"));
-        for (String rank : plugin.getGuardRankManager().getRankList()) {
+        GuardRankManager rankManager = plugin.getGuardRankManager();
+        sender.sendMessage(MessageUtils.parseMessage("<gold><bold>Guard Ranks (in hierarchy order):</bold></gold>"));
+        
+        for (int i = 0; i < rankManager.getRankList().size(); i++) {
+            String rank = rankManager.getRankList().get(i);
             String group = plugin.getConfig().getString("guard-rank-groups." + rank);
-            sender.sendMessage(MessageUtils.parseMessage("<yellow>" + rank + ": <white>" + (group != null ? group : "<gray>(no group mapped)</gray>") + "</white></yellow>"));
+            String position = String.format("%d", i);
+            sender.sendMessage(MessageUtils.parseMessage(
+                String.format("<yellow>%s. %s: <white>%s</white></yellow>", 
+                    position, rank, group != null ? group : "<gray>(no group mapped)</gray>")
+            ));
         }
     }
 

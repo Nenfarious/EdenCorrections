@@ -45,15 +45,17 @@ public class MySQLStorage implements StorageManager {
             config.setPassword(password);
             config.setDriverClassName("com.mysql.cj.jdbc.Driver");
 
-            // Connection pool settings
+            // Connection pool settings with improved reliability
             config.setMaximumPoolSize(10);
             config.setMinimumIdle(2);
             config.setIdleTimeout(30000);
             config.setConnectionTimeout(10000);
             config.setMaxLifetime(1800000);
             config.setPoolName("EdenCorrections-MySQL");
+            config.setValidationTimeout(5000);
+            config.setLeakDetectionThreshold(60000);
 
-            // Set additional MySQL properties for better performance
+            // Set additional MySQL properties for better performance and reliability
             config.addDataSourceProperty("cachePrepStmts", "true");
             config.addDataSourceProperty("prepStmtCacheSize", "250");
             config.addDataSourceProperty("prepStmtCacheSqlLimit", "2048");
@@ -64,11 +66,24 @@ public class MySQLStorage implements StorageManager {
             config.addDataSourceProperty("cacheServerConfiguration", "true");
             config.addDataSourceProperty("elideSetAutoCommits", "true");
             config.addDataSourceProperty("maintainTimeStats", "false");
-            config.addDataSourceProperty("characterEncoding", "utf8");
+            config.addDataSourceProperty("characterEncoding", "utf8mb4");
             config.addDataSourceProperty("useUnicode", "true");
+            config.addDataSourceProperty("autoReconnect", "true");
+            config.addDataSourceProperty("failOverReadOnly", "false");
+            config.addDataSourceProperty("maxReconnects", "3");
+            config.addDataSourceProperty("initialTimeout", "2");
+            config.addDataSourceProperty("connectTimeout", "5000");
+            config.addDataSourceProperty("socketTimeout", "30000");
 
             // Create data source
             dataSource = new HikariDataSource(config);
+
+            // Test connection
+            try (Connection conn = dataSource.getConnection()) {
+                if (!conn.isValid(5)) {
+                    throw new SQLException("Database connection test failed");
+                }
+            }
 
             // Create tables
             createTables();
@@ -76,30 +91,84 @@ public class MySQLStorage implements StorageManager {
             plugin.getLogger().info("MySQL connection established successfully");
         } catch (Exception e) {
             plugin.getLogger().log(Level.SEVERE, "Failed to initialize MySQL connection", e);
+            // Attempt recovery
+            try {
+                Thread.sleep(1000); // Wait a bit before retry
+                initialize(); // Retry initialization
+            } catch (InterruptedException ie) {
+                Thread.currentThread().interrupt();
+            }
         }
     }
 
-    private void createTables() {
-        try (Connection conn = dataSource.getConnection();
-             Statement stmt = conn.createStatement()) {
+    private Connection getConnection() throws SQLException {
+        int maxRetries = 3;
+        int retryDelay = 100; // milliseconds
+        
+        for (int attempt = 0; attempt < maxRetries; attempt++) {
+            try {
+                if (dataSource == null || dataSource.isClosed()) {
+                    initialize();
+                }
+                Connection conn = dataSource.getConnection();
+                if (!conn.isValid(5)) {
+                    conn.close();
+                    throw new SQLException("Connection validation failed");
+                }
+                return conn;
+            } catch (SQLException e) {
+                if (isConnectionError(e) && attempt < maxRetries - 1) {
+                    plugin.getLogger().warning("Database connection failed (attempt " + (attempt + 1) + "), retrying...");
+                    initialize();
+                    try {
+                        Thread.sleep(retryDelay * (attempt + 1)); // Exponential backoff
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                        throw new SQLException("Connection interrupted", ie);
+                    }
+                    continue;
+                }
+                throw e;
+            }
+        }
+        throw new SQLException("Failed to establish database connection after " + maxRetries + " attempts");
+    }
 
-            // Create duty status table
+    private boolean isConnectionError(SQLException e) {
+        String message = e.getMessage();
+        return message != null && (
+            message.contains("Communications link failure") ||
+            message.contains("Connection refused") ||
+            message.contains("No operations allowed after connection closed") ||
+            message.contains("Connection is closed") ||
+            message.contains("Connection has been closed") ||
+            message.contains("Connection pool exhausted") ||
+            message.contains("timeout") ||
+            message.contains("busy")
+        );
+    }
+
+    private void createTables() {
+        try (Connection conn = getConnection();
+             Statement stmt = conn.createStatement()) {
+            
+            // Create duty_status table
             stmt.execute("CREATE TABLE IF NOT EXISTS " + tablePrefix + "duty_status (" +
                     "player_id VARCHAR(36) PRIMARY KEY, " +
-                    "is_on_duty BOOLEAN NOT NULL" +
-                    ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+                    "is_on_duty BOOLEAN NOT NULL DEFAULT FALSE, " +
+                    "last_duty_change TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, " +
+                    "total_duty_time BIGINT NOT NULL DEFAULT 0, " +
+                    "last_duty_time BIGINT NOT NULL DEFAULT 0)");
 
-            // Create duty start times table
-            stmt.execute("CREATE TABLE IF NOT EXISTS " + tablePrefix + "duty_start_times (" +
+            // Create activity_stats table
+            stmt.execute("CREATE TABLE IF NOT EXISTS " + tablePrefix + "activity_stats (" +
                     "player_id VARCHAR(36) PRIMARY KEY, " +
-                    "start_time BIGINT NOT NULL" +
-                    ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
-
-            // Create off-duty minutes table
-            stmt.execute("CREATE TABLE IF NOT EXISTS " + tablePrefix + "off_duty_minutes (" +
-                    "player_id VARCHAR(36) PRIMARY KEY, " +
-                    "minutes INT NOT NULL" +
-                    ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+                    "search_count INT NOT NULL DEFAULT 0, " +
+                    "successful_search_count INT NOT NULL DEFAULT 0, " +
+                    "kill_count INT NOT NULL DEFAULT 0, " +
+                    "metal_detect_count INT NOT NULL DEFAULT 0, " +
+                    "apprehension_count INT NOT NULL DEFAULT 0, " +
+                    "FOREIGN KEY (player_id) REFERENCES " + tablePrefix + "duty_status(player_id) ON DELETE CASCADE)");
 
         } catch (SQLException e) {
             plugin.getLogger().log(Level.SEVERE, "Failed to create tables", e);
@@ -327,5 +396,229 @@ public class MySQLStorage implements StorageManager {
         }
 
         return offDutyMinutes;
+    }
+
+    @Override
+    public int getSearchCount(UUID playerId) {
+        try (Connection conn = getConnection();
+             PreparedStatement stmt = conn.prepareStatement(
+                     "SELECT search_count FROM " + tablePrefix + "activity_stats WHERE player_id = ?")) {
+            
+            stmt.setString(1, playerId.toString());
+            ResultSet rs = stmt.executeQuery();
+            
+            if (rs.next()) {
+                return rs.getInt("search_count");
+            }
+            
+            // Create new record if none exists
+            try (PreparedStatement insertStmt = conn.prepareStatement(
+                    "INSERT INTO " + tablePrefix + "activity_stats (player_id, search_count) VALUES (?, 0)")) {
+                insertStmt.setString(1, playerId.toString());
+                insertStmt.executeUpdate();
+            }
+            
+            return 0;
+        } catch (SQLException e) {
+            plugin.getLogger().log(Level.SEVERE, "Failed to get search count", e);
+            return 0;
+        }
+    }
+
+    @Override
+    public void incrementSearchCount(UUID playerId) {
+        try (Connection conn = getConnection();
+             PreparedStatement stmt = conn.prepareStatement(
+                     "INSERT INTO " + tablePrefix + "activity_stats (player_id, search_count) VALUES (?, 1) " +
+                     "ON DUPLICATE KEY UPDATE search_count = search_count + 1")) {
+            
+            stmt.setString(1, playerId.toString());
+            stmt.executeUpdate();
+        } catch (SQLException e) {
+            plugin.getLogger().log(Level.SEVERE, "Failed to increment search count", e);
+        }
+    }
+
+    @Override
+    public int getSuccessfulSearchCount(UUID playerId) {
+        try (Connection conn = getConnection();
+             PreparedStatement stmt = conn.prepareStatement(
+                     "SELECT successful_search_count FROM " + tablePrefix + "activity_stats WHERE player_id = ?")) {
+            
+            stmt.setString(1, playerId.toString());
+            ResultSet rs = stmt.executeQuery();
+            
+            if (rs.next()) {
+                return rs.getInt("successful_search_count");
+            }
+            
+            // Create new record if none exists
+            try (PreparedStatement insertStmt = conn.prepareStatement(
+                    "INSERT INTO " + tablePrefix + "activity_stats (player_id, successful_search_count) VALUES (?, 0)")) {
+                insertStmt.setString(1, playerId.toString());
+                insertStmt.executeUpdate();
+            }
+            
+            return 0;
+        } catch (SQLException e) {
+            plugin.getLogger().log(Level.SEVERE, "Failed to get successful search count", e);
+            return 0;
+        }
+    }
+
+    @Override
+    public void incrementSuccessfulSearchCount(UUID playerId) {
+        try (Connection conn = getConnection();
+             PreparedStatement stmt = conn.prepareStatement(
+                     "INSERT INTO " + tablePrefix + "activity_stats (player_id, successful_search_count) VALUES (?, 1) " +
+                     "ON DUPLICATE KEY UPDATE successful_search_count = successful_search_count + 1")) {
+            
+            stmt.setString(1, playerId.toString());
+            stmt.executeUpdate();
+        } catch (SQLException e) {
+            plugin.getLogger().log(Level.SEVERE, "Failed to increment successful search count", e);
+        }
+    }
+
+    @Override
+    public int getKillCount(UUID playerId) {
+        try (Connection conn = getConnection();
+             PreparedStatement stmt = conn.prepareStatement(
+                     "SELECT kill_count FROM " + tablePrefix + "activity_stats WHERE player_id = ?")) {
+            
+            stmt.setString(1, playerId.toString());
+            ResultSet rs = stmt.executeQuery();
+            
+            if (rs.next()) {
+                return rs.getInt("kill_count");
+            }
+            
+            // Create new record if none exists
+            try (PreparedStatement insertStmt = conn.prepareStatement(
+                    "INSERT INTO " + tablePrefix + "activity_stats (player_id, kill_count) VALUES (?, 0)")) {
+                insertStmt.setString(1, playerId.toString());
+                insertStmt.executeUpdate();
+            }
+            
+            return 0;
+        } catch (SQLException e) {
+            plugin.getLogger().log(Level.SEVERE, "Failed to get kill count", e);
+            return 0;
+        }
+    }
+
+    @Override
+    public void incrementKillCount(UUID playerId) {
+        try (Connection conn = getConnection();
+             PreparedStatement stmt = conn.prepareStatement(
+                     "INSERT INTO " + tablePrefix + "activity_stats (player_id, kill_count) VALUES (?, 1) " +
+                     "ON DUPLICATE KEY UPDATE kill_count = kill_count + 1")) {
+            
+            stmt.setString(1, playerId.toString());
+            stmt.executeUpdate();
+        } catch (SQLException e) {
+            plugin.getLogger().log(Level.SEVERE, "Failed to increment kill count", e);
+        }
+    }
+
+    @Override
+    public int getMetalDetectCount(UUID playerId) {
+        try (Connection conn = getConnection();
+             PreparedStatement stmt = conn.prepareStatement(
+                     "SELECT metal_detect_count FROM " + tablePrefix + "activity_stats WHERE player_id = ?")) {
+            
+            stmt.setString(1, playerId.toString());
+            ResultSet rs = stmt.executeQuery();
+            
+            if (rs.next()) {
+                return rs.getInt("metal_detect_count");
+            }
+            
+            // Create new record if none exists
+            try (PreparedStatement insertStmt = conn.prepareStatement(
+                    "INSERT INTO " + tablePrefix + "activity_stats (player_id, metal_detect_count) VALUES (?, 0)")) {
+                insertStmt.setString(1, playerId.toString());
+                insertStmt.executeUpdate();
+            }
+            
+            return 0;
+        } catch (SQLException e) {
+            plugin.getLogger().log(Level.SEVERE, "Failed to get metal detect count", e);
+            return 0;
+        }
+    }
+
+    @Override
+    public void incrementMetalDetectCount(UUID playerId) {
+        try (Connection conn = getConnection();
+             PreparedStatement stmt = conn.prepareStatement(
+                     "INSERT INTO " + tablePrefix + "activity_stats (player_id, metal_detect_count) VALUES (?, 1) " +
+                     "ON DUPLICATE KEY UPDATE metal_detect_count = metal_detect_count + 1")) {
+            
+            stmt.setString(1, playerId.toString());
+            stmt.executeUpdate();
+        } catch (SQLException e) {
+            plugin.getLogger().log(Level.SEVERE, "Failed to increment metal detect count", e);
+        }
+    }
+
+    @Override
+    public int getApprehensionCount(UUID playerId) {
+        try (Connection conn = getConnection();
+             PreparedStatement stmt = conn.prepareStatement(
+                     "SELECT apprehension_count FROM " + tablePrefix + "activity_stats WHERE player_id = ?")) {
+            
+            stmt.setString(1, playerId.toString());
+            ResultSet rs = stmt.executeQuery();
+            
+            if (rs.next()) {
+                return rs.getInt("apprehension_count");
+            }
+            
+            // Create new record if none exists
+            try (PreparedStatement insertStmt = conn.prepareStatement(
+                    "INSERT INTO " + tablePrefix + "activity_stats (player_id, apprehension_count) VALUES (?, 0)")) {
+                insertStmt.setString(1, playerId.toString());
+                insertStmt.executeUpdate();
+            }
+            
+            return 0;
+        } catch (SQLException e) {
+            plugin.getLogger().log(Level.SEVERE, "Failed to get apprehension count", e);
+            return 0;
+        }
+    }
+
+    @Override
+    public void incrementApprehensionCount(UUID playerId) {
+        try (Connection conn = getConnection();
+             PreparedStatement stmt = conn.prepareStatement(
+                     "INSERT INTO " + tablePrefix + "activity_stats (player_id, apprehension_count) VALUES (?, 1) " +
+                     "ON DUPLICATE KEY UPDATE apprehension_count = apprehension_count + 1")) {
+            
+            stmt.setString(1, playerId.toString());
+            stmt.executeUpdate();
+        } catch (SQLException e) {
+            plugin.getLogger().log(Level.SEVERE, "Failed to increment apprehension count", e);
+        }
+    }
+
+    @Override
+    public void resetActivityCounts(UUID playerId) {
+        try (Connection conn = getConnection();
+             PreparedStatement stmt = conn.prepareStatement(
+                     "UPDATE " + tablePrefix + "activity_stats SET " +
+                     "search_count = 0, " +
+                     "successful_search_count = 0, " +
+                     "kill_count = 0, " +
+                     "metal_detect_count = 0, " +
+                     "apprehension_count = 0 " +
+                     "WHERE player_id = ?")) {
+            
+            stmt.setString(1, playerId.toString());
+            stmt.executeUpdate();
+        } catch (SQLException e) {
+            plugin.getLogger().log(Level.SEVERE, "Failed to reset activity counts", e);
+        }
     }
 }

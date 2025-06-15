@@ -24,6 +24,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public class ContrabandManager {
     private final EdenCorrections plugin;
     private final SQLiteStorage sqliteStorage;
+    private final File dataDir;
     private final File contrabandFile;
     private FileConfiguration contrabandConfig;
     
@@ -67,7 +68,11 @@ public class ContrabandManager {
     public ContrabandManager(EdenCorrections plugin) {
         this.plugin = plugin;
         this.sqliteStorage = (SQLiteStorage) plugin.getStorageManager();
-        this.contrabandFile = new File(plugin.getDataFolder(), "contraband_registry.yml");
+        this.dataDir = new File(plugin.getDataFolder(), "data");
+        if (!dataDir.exists()) {
+            dataDir.mkdirs();
+        }
+        this.contrabandFile = new File(dataDir, "contraband_registry.yml");
         this.contrabandTypeKey = new NamespacedKey(plugin, "contraband_type");
         this.contrabandTimeKey = new NamespacedKey(plugin, "contraband_time");
         this.contrabandAdminKey = new NamespacedKey(plugin, "contraband_admin");
@@ -381,5 +386,110 @@ public class ContrabandManager {
         public int hashCode() {
             return Objects.hash(material, displayName, loreHash);
         }
+    }
+
+    public static class DrugEffect {
+        public final Drug drug;
+        public final long startTime;
+
+        public DrugEffect(Drug drug, long startTime) {
+            this.drug = drug;
+            this.startTime = startTime;
+        }
+    }
+
+    public static class Drug {
+        public final String name;
+        public final int duration;
+        public final int tokenReward;
+
+        public Drug(String name, int duration, int tokenReward) {
+            this.name = name;
+            this.duration = duration;
+            this.tokenReward = tokenReward;
+        }
+    }
+
+    private final Map<UUID, DrugEffect> activeDrugEffects = new ConcurrentHashMap<>();
+
+    public boolean isUnderDrugEffect(Player player) {
+        return activeDrugEffects.containsKey(player.getUniqueId());
+    }
+
+    public DrugEffect getActiveDrugEffect(Player player) {
+        return activeDrugEffects.get(player.getUniqueId());
+    }
+
+    public void handleDrugUse(Player player, ItemStack item) {
+        // Implementation for handling drug use
+        // This would be implemented based on your drug system requirements
+    }
+
+    public boolean isDrug(ItemStack item) {
+        if (item == null) return false;
+        
+        // Check if it's a manually tagged drug
+        ContrabandType type = getContrabandType(item);
+        if (type == ContrabandType.DRUG) {
+            return true;
+        }
+        
+        // Check if it's an ExecutableItem drug
+        if (plugin.hasExecutableItems()) {
+            String eiId = plugin.getExternalPluginIntegration().getExecutableItemId(item);
+            if (eiId != null && plugin.getExternalPluginIntegration().isDrugItemId(eiId)) {
+                return true;
+            }
+        }
+        
+        return false;
+    }
+
+    public List<ItemStack> confiscateContraband(Player target) {
+        List<ItemStack> confiscatedItems = new ArrayList<>();
+        ItemStack[] contents = target.getInventory().getContents();
+        
+        for (int i = 0; i < contents.length; i++) {
+            ItemStack item = contents[i];
+            if (item == null) continue;
+            
+            if (isContraband(item)) {
+                confiscatedItems.add(item);
+                contents[i] = null;
+            }
+        }
+        
+        target.getInventory().setContents(contents);
+        return confiscatedItems;
+    }
+
+    public int getTokenReward(ItemStack item) {
+        if (item == null) return 0;
+        
+        // Check if it's an ExecutableItem drug
+        if (plugin.hasExecutableItems()) {
+            String eiId = plugin.getExternalPluginIntegration().getExecutableItemId(item);
+            if (eiId != null && plugin.getExternalPluginIntegration().isDrugItemId(eiId)) {
+                // Get token reward from config
+                return plugin.getConfig().getInt("drugs." + eiId + ".token_reward", 100);
+            }
+        }
+        
+        // Default reward for manually tagged drugs
+        return 100;
+    }
+
+    public void loadConfig() {
+        // Implementation for loading configuration
+        // This would be implemented based on your configuration system
+    }
+
+    public String getExecutableItemId(ItemStack item) {
+        if (item == null) return null;
+        return plugin.getExternalPluginIntegration().getExecutableItemId(item);
+    }
+
+    public Map<String, Set<ContrabandItem>> getContrabandItems() {
+        return contrabandRegistry;
     }
 } 

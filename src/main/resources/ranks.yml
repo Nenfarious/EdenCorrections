@@ -34,34 +34,34 @@ progression:
 # =================================
 # Guard Rank Definitions
 # =================================
-ranks:
+guard-ranks:
+  hierarchy:
+    - "trainee"
+    - "private"
+    - "officer"
+    - "sergeant"
+    - "captain"
+    - "warden"
+
   trainee:
     display-name: "§7Trainee"
-    description: "Entry-level guard position"
-    daily-tokens: 150
-    # Items this rank can use
+    description: "New guard with basic training"
+    daily-tokens: 100
     can-use: 
       - "handcuffs"
-      - "guard-baton"
-    # Passive buffs for this rank (while on duty)
-    buffs: []
-    # Special permissions for this rank
     rank-permissions:
       - "edencorrections.rank.trainee"
-      - "edencorrections.use"
+      - "edencorrections.guard"
       - "edencorrections.duty"
       - "edencorrections.duty.check"
 
   private:
     display-name: "§aPrivate"
-    description: "Basic guard with expanded privileges"
-    daily-tokens: 300
+    description: "Basic guard with drug detection"
+    daily-tokens: 250
     can-use: 
       - "handcuffs"
-      - "guard-baton"
       - "drug-sniffer"
-    buffs: 
-      - "SPEED:1"
     rank-permissions:
       - "edencorrections.rank.private"
       - "edencorrections.guard"
@@ -75,7 +75,6 @@ ranks:
     daily-tokens: 500
     can-use: 
       - "handcuffs"
-      - "guard-baton"
       - "drug-sniffer"
       - "metal-detector"
       - "spyglass"
@@ -96,12 +95,10 @@ ranks:
     daily-tokens: 750
     can-use: 
       - "handcuffs"
-      - "guard-baton"
       - "drug-sniffer"
       - "metal-detector"
       - "spyglass"
-      - "taser"
-      - "smoke-bomb"
+      - "guard-baton"
     buffs: 
       - "SPEED:1"
       - "STRENGTH:1"
@@ -116,24 +113,50 @@ ranks:
       - "edencorrections.guard.chase"
       - "edencorrections.guard.jail"
 
-  warden:
-    display-name: "§cWarden"
-    description: "Highest ranking guard with full authority"
+  captain:
+    display-name: "§6Captain"
+    description: "High-ranking guard with tactical equipment"
     daily-tokens: 1000
     can-use: 
       - "handcuffs"
-      - "guard-baton"
       - "drug-sniffer"
       - "metal-detector"
       - "spyglass"
+      - "guard-baton"
       - "taser"
-      - "smoke-bomb"
-      - "riot-shield"
-      - "prison-remote"
     buffs: 
       - "SPEED:2"
       - "STRENGTH:1"
       - "RESISTANCE:1"
+      - "JUMP:1"
+    rank-permissions:
+      - "edencorrections.rank.captain"
+      - "edencorrections.guard"
+      - "edencorrections.duty"
+      - "edencorrections.duty.check"
+      - "edencorrections.duty.actions"
+      - "edencorrections.guard.items"
+      - "edencorrections.guard.chase"
+      - "edencorrections.guard.jail"
+      - "edencorrections.guard.manage"
+
+  warden:
+    display-name: "§cWarden"
+    description: "Highest ranking guard with full authority"
+    daily-tokens: 1500
+    can-use: 
+      - "handcuffs"
+      - "drug-sniffer"
+      - "metal-detector"
+      - "spyglass"
+      - "guard-baton"
+      - "taser"
+      - "prison-remote"
+    buffs: 
+      - "SPEED:2"
+      - "STRENGTH:2"
+      - "RESISTANCE:2"
+      - "JUMP:1"
       - "NIGHT_VISION:1"
     rank-permissions:
       - "edencorrections.rank.warden"
@@ -144,9 +167,8 @@ ranks:
       - "edencorrections.guard.items"
       - "edencorrections.guard.chase"
       - "edencorrections.guard.jail"
-      - "edencorrections.progression"
-      - "edencorrections.shop"
-      - "edencorrections.admin.basic"
+      - "edencorrections.guard.manage"
+      - "edencorrections.admin"
 
 # =================================
 # LuckPerms Integration

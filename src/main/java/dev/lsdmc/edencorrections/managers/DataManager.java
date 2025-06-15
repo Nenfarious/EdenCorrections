@@ -9,7 +9,9 @@ import org.bukkit.scheduler.BukkitTask;
 import java.io.File;
 import java.io.IOException;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
@@ -45,18 +47,28 @@ public class DataManager implements StorageManager {
     // Autosave task
     private BukkitTask autoSaveTask;
 
+    // Add cleanup task
+    private BukkitTask cleanupTask;
+    private static final long CLEANUP_INTERVAL = 30 * 60 * 20; // 30 minutes in ticks
+    private static final long INACTIVE_THRESHOLD = 7 * 24 * 60 * 60 * 1000; // 7 days in milliseconds
+
     public DataManager(EdenCorrections plugin) {
         this.plugin = plugin;
         this.configManager = plugin.getConfigManager();
 
+        // Initialize data directory
+        File dataDir = new File(plugin.getDataFolder(), "data");
+        if (!dataDir.exists()) {
+            dataDir.mkdirs();
+        }
+
         // Initialize data file
-        dataFile = new File(plugin.getDataFolder(), "data.yml");
+        dataFile = new File(dataDir, "player_data.yml");
         if (!dataFile.exists()) {
             try {
-                plugin.getDataFolder().mkdirs();
                 dataFile.createNewFile();
             } catch (IOException e) {
-                plugin.getLogger().log(Level.SEVERE, "Failed to create data.yml", e);
+                plugin.getLogger().log(Level.SEVERE, "Failed to create player_data.yml", e);
             }
         }
 
@@ -73,6 +85,9 @@ public class DataManager implements StorageManager {
 
         // Start autosave task
         startAutoSaveTask();
+
+        // Start cleanup task
+        startCleanupTask();
 
         plugin.getLogger().info("DataManager initialized successfully");
     }
@@ -110,10 +125,28 @@ public class DataManager implements StorageManager {
         // Cancel autosave task
         if (autoSaveTask != null) {
             autoSaveTask.cancel();
+            autoSaveTask = null;
+        }
+
+        // Cancel cleanup task
+        if (cleanupTask != null) {
+            cleanupTask.cancel();
+            cleanupTask = null;
         }
 
         // Save all data
         saveAll();
+
+        // Clear all maps
+        dutyStatus.clear();
+        dutyStartTimes.clear();
+        offDutyMinutes.clear();
+        searchCount.clear();
+        successfulSearchCount.clear();
+        killCount.clear();
+        metalDetectCount.clear();
+        apprehensionCount.clear();
+        dirtyData.clear();
 
         plugin.getLogger().info("DataManager shutdown successfully");
     }
@@ -548,5 +581,64 @@ public class DataManager implements StorageManager {
         metalDetectCount.put(playerId, 0);
         apprehensionCount.put(playerId, 0);
         markDirty(playerId);
+    }
+
+    private void startCleanupTask() {
+        // Cancel existing task if running
+        if (cleanupTask != null) {
+            cleanupTask.cancel();
+        }
+
+        // Start new task
+        cleanupTask = plugin.getServer().getScheduler().runTaskTimerAsynchronously(
+            plugin,
+            this::cleanupInactiveData,
+            CLEANUP_INTERVAL,
+            CLEANUP_INTERVAL
+        );
+    }
+
+    private void cleanupInactiveData() {
+        long currentTime = System.currentTimeMillis();
+        Set<UUID> toRemove = new HashSet<>();
+
+        // Check all maps for inactive players
+        for (UUID playerId : dutyStatus.keySet()) {
+            if (isPlayerInactive(playerId, currentTime)) {
+                toRemove.add(playerId);
+            }
+        }
+
+        // Remove inactive players from all maps
+        for (UUID playerId : toRemove) {
+            dutyStatus.remove(playerId);
+            dutyStartTimes.remove(playerId);
+            offDutyMinutes.remove(playerId);
+            searchCount.remove(playerId);
+            successfulSearchCount.remove(playerId);
+            killCount.remove(playerId);
+            metalDetectCount.remove(playerId);
+            apprehensionCount.remove(playerId);
+            dirtyData.remove(playerId);
+        }
+
+        if (!toRemove.isEmpty()) {
+            plugin.getLogger().info("Cleaned up data for " + toRemove.size() + " inactive players");
+        }
+    }
+
+    private boolean isPlayerInactive(UUID playerId, long currentTime) {
+        // Check if player is online
+        if (plugin.getServer().getPlayer(playerId) != null) {
+            return false;
+        }
+
+        // Check last activity time
+        Long lastActivity = dutyStartTimes.get(playerId);
+        if (lastActivity == null) {
+            return true;
+        }
+
+        return (currentTime - lastActivity) > INACTIVE_THRESHOLD;
     }
 }

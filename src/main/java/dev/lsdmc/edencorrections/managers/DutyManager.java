@@ -70,6 +70,9 @@ public class DutyManager {
     // Emergency killswitch
     private static volatile boolean emergencyShutdown = false;
 
+    private File dataDir;
+    private boolean useInventoryCache;
+
     public DutyManager(EdenCorrections plugin, NPCManager npcManager) {
         this.plugin = plugin;
         this.configManager = plugin.getConfigManager();
@@ -77,17 +80,25 @@ public class DutyManager {
         this.storageManager = plugin.getStorageManager();
         loadConfig();
 
-        // Initialize inventory storage
-        inventoryFile = new File(plugin.getDataFolder(), "inventories.yml");
-        if (!inventoryFile.exists()) {
-            try {
-                plugin.getDataFolder().mkdirs();
-                inventoryFile.createNewFile();
-            } catch (IOException e) {
-                plugin.getLogger().log(Level.SEVERE, "Failed to create inventories.yml", e);
-            }
+        this.dataDir = new File(plugin.getDataFolder(), "data");
+        if (!dataDir.exists()) {
+            dataDir.mkdirs();
         }
-        inventoryConfig = YamlConfiguration.loadConfiguration(inventoryFile);
+        // Check if we should use file-based inventory caching
+        useInventoryCache = plugin.getConfigManager().getDutyConfig().inventoryCacheEnabled;
+        
+        if (useInventoryCache) {
+            inventoryFile = new File(dataDir, "inventories.yml");
+            if (!inventoryFile.exists()) {
+                try {
+                    plugin.getDataFolder().mkdirs();
+                    inventoryFile.createNewFile();
+                } catch (IOException e) {
+                    plugin.getLogger().log(Level.SEVERE, "Failed to create inventories.yml", e);
+                }
+            }
+            inventoryConfig = YamlConfiguration.loadConfiguration(inventoryFile);
+        }
 
         // Load saved inventories
         loadInventories();
@@ -651,8 +662,16 @@ public class DutyManager {
             plugin.getLogger().info("Giving " + player.getName() + " kit: " + kitName);
         }
 
-        // Build and execute the command
-        String kitCommand = "cmi kit " + kitName + " " + player.getName();
+        // Get the kit command format from integrations config
+        String commandFormat = plugin.getConfigManager().getIntegrationsConfig().kitCommandFormat;
+        if (commandFormat == null || commandFormat.isEmpty()) {
+            commandFormat = "cmi kit {kit} {player}"; // Default fallback
+        }
+        
+        // Build and execute the command using the configured format
+        String kitCommand = commandFormat
+                .replace("{kit}", kitName)
+                .replace("{player}", player.getName());
 
         // Execute the command on the main thread
         Bukkit.getScheduler().runTask(plugin, () -> {
@@ -795,7 +814,7 @@ public class DutyManager {
             
             // Award points for search
             plugin.getGuardProgressionManager().addPoints(player, 
-                plugin.getConfig().getInt("guard-progression.rewards.search", 10),
+                plugin.getGuardProgressionManager().getRewardAmount("search"),
                 "Conducting a search");
 
             // Send message about search being recorded
@@ -827,7 +846,7 @@ public class DutyManager {
             
             // Award points for metal detection
             plugin.getGuardProgressionManager().addPoints(player,
-                plugin.getConfig().getInt("guard-progression.rewards.metal-detect", 15),
+                plugin.getGuardProgressionManager().getRewardAmount("metal-detect"),
                 "Successful metal detection");
 
             // Send message about metal detection being recorded
@@ -844,7 +863,7 @@ public class DutyManager {
             
             // Award points for apprehension
             plugin.getGuardProgressionManager().addPoints(player,
-                plugin.getConfig().getInt("guard-progression.rewards.apprehension", 50),
+                plugin.getGuardProgressionManager().getRewardAmount("apprehension"),
                 "Successful apprehension");
 
             // Send message about apprehension being recorded
@@ -964,8 +983,8 @@ public class DutyManager {
             return false;
         }
 
-        // Check minimum minutes
-        int minimumMinutes = plugin.getConfig().getInt("conversion.tokens.minimum", 5);
+        // Check minimum minutes using shop config
+        int minimumMinutes = plugin.getConfigManager().getShopConfig().conversion.offDutyToTokensMinimum;
         if (minutes < minimumMinutes) {
             player.sendMessage(MessageUtils.getPrefix(plugin).append(
                 MessageUtils.parseMessage("<red>Minimum conversion is " + minimumMinutes + " minutes!</red>")));
